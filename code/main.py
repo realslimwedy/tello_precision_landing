@@ -29,6 +29,15 @@ me.land()
 
 # control drone via keyboard
 while True:
+    for event in pygame.event.get():
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                print("Landing drone and ending program...")
+                me.land()
+                me.streamoff()
+                pygame.quit()
+                sys.exit()
+
     vals=tp.keyboard_control_drone(me, (0,0,0,0))
     me.send_rc_control(vals[0],vals[1],vals[2],vals[3])
     time.sleep(0.05)
