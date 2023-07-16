@@ -55,15 +55,26 @@ def keyboard_rc(me, rc_values):
     return (lr, fb, ud, yv)
 
 # Save image via keyboard
-def save_image(img):
+def save_image_key_pressed():
     if get_key('SPACE'):
         print('spacebar pressed - saving image...')
-        img=cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        cv2.imwrite(f'data/images_saved_by_drone/{time.time()}.jpg', img)
-        time.sleep(0.2)
+        return True
+    return False
+
+# Start and stop video feed via keyboard
+def video_feed_key_pressed(video_feed_on):
+    if get_key('f'):
+        if video_feed_on:
+            print('f pressed: Video feed stopped...')
+        elif not video_feed_on:
+            print('f pressed: Video feed started...')
+        return True
+    return False
+
 
 def exit_app(me):
     if get_key('ESCAPE'):
         print("ESC pressed: Landing drone and ending program...")
+        print(f'Remaining Battery Level: {me.get_battery()} %')
         return True
     return False
