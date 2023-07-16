@@ -70,15 +70,7 @@ def exit_app(me):
         print("Landing drone and ending program...")
         me.land()
         me.streamoff()
+        cv2.destroyAllWindows()
         pygame.quit()
-        
-def exit_app(me):
-    for event in pygame.event.get():
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                print("Escape key pressed. Exiting...")
-                me.land()
-                me.streamoff()
-                pygame.quit()
-                return True
+        return True
     return False
