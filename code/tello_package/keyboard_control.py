@@ -1,6 +1,7 @@
 import pygame
 import time
 import cv2
+import sys
 
 # Initialize pygame
 def init_keyboard_control():
@@ -60,5 +61,24 @@ def keyboard_control_drone(me, rc_params):
 def save_image(img):
     if get_key('z'):
         print('z pressed')
+        img=cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         cv2.imwrite(f'data/saved_by_drone/{time.time()}.jpg', img)
         time.sleep(0.2)
+
+def exit_app(me):
+    if get_key('ESCAPE'):
+        print("Landing drone and ending program...")
+        me.land()
+        me.streamoff()
+        pygame.quit()
+        
+def exit_app(me):
+    for event in pygame.event.get():
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                print("Escape key pressed. Exiting...")
+                me.land()
+                me.streamoff()
+                pygame.quit()
+                return True
+    return False

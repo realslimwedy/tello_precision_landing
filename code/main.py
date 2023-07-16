@@ -3,10 +3,10 @@ import pygame
 from djitellopy import tello
 import tello_package as tp
 import time
+import sys
 
 # Connect to TELLO drone wifi
 tp.connect_to_wifi("TELLO-9C7357")
-#time.sleep(7)
 
 # Initialize drone & connect
 tp.init_keyboard_control()
@@ -17,27 +17,24 @@ time.sleep(0.5)
 
 #me.streamon()
 
-''' test flight
-me.takeoff()
-me.send_rc_control(0,50,0,0)
-sleep(2)
-me.send_rc_control(0,0,0,30)
-sleep(2)
-me.send_rc_control(0,0,0,0)
-me.land()
-'''
-
-# control drone via keyboard
+# Control drone via keyboard
 while True:
-    for event in pygame.event.get():
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                print("Landing drone and ending program...")
-                me.land()
-                me.streamoff()
-                pygame.quit()
-                sys.exit()
-
-    vals=tp.keyboard_control_drone(me, (0,0,0,0))
-    me.send_rc_control(vals[0],vals[1],vals[2],vals[3])
+    
+    vals = tp.keyboard_control_drone(me, (0, 0, 0, 0))
+    me.send_rc_control(vals[0], vals[1], vals[2], vals[3])
     time.sleep(0.05)
+
+    # Save image upon pressing z
+    #img = me.get_frame_read().frame
+    #tp.save_image(img)
+    
+    # Quit program upon pressing q
+    if tp.exit_app(me):
+        break
+    
+
+tp.connect_to_wifi("Leev_Marie")
+sys.exit()
+
+# next todos:
+# - add image/video capture upon button press

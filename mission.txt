@@ -11,3 +11,6 @@ MVP
 Premium Features:
 - Fly to location following line on the ground
 - Run Python on Pi
+- identify person
+- scan area for person
+- send image to drone, rescue mission
