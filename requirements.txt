@@ -5,3 +5,4 @@ pyaudio
 websockets
 mediapipe
 tensorflow
+pygame
