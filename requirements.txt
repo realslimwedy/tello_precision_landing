@@ -1,0 +1,7 @@
+djitellopy
+matplotlib
+opencv-python
+pyaudio
+websockets
+mediapipe
+tensorflow
