@@ -2,14 +2,14 @@ import pygame, cv2, time, sys, asyncio
 from djitellopy import tello
 import tello_package as tp
 import object_tracking as ot
+import argparse
 
 
 if __name__ == '__main__': 
-    tp.connect_to_wifi("TELLO-9C7357")
+    # tp.connect_to_wifi("TELLO-9C7357")
     width, height = 640, 480
     resolution = (width, height)
-    ud_approach_range = [75,125]
-    ud_approach_center = 100
+    ud_approach_center_area = 20000 # this needs to be calibrated, different for every resolution(?)
     PID= [0.4, 0, 0.4] 
     prv_error = (0, 0, 0, 0)
     tp.init_keyboard_control()
@@ -23,6 +23,8 @@ if __name__ == '__main__':
     # maybe implement a data mode to specify image video saving and video feed on/off
     video_feed_on = False
     video_capture_on = False
+    exit_program = False
+    drone_is_on = True
 
 
     async def main():
@@ -30,8 +32,8 @@ if __name__ == '__main__':
 
         async def drone_control():
             while True:
-                '''rc_params= (0, 0, 0, 0)
-                img = me.get_frame_read().frame
+                rc_params= (0, 0, 0, 0)
+                '''img = me.get_frame_read().frame
                 # AutoPilot (flight phase) - Priority 2
                 if auto_pilot==True:
                     img, apriltag_center, apriltag_area = ot.apriltag_center_area(img)
@@ -56,9 +58,14 @@ if __name__ == '__main__':
                     if me.is_flying==True: 
                         me.land()
                     me.streamoff()
+                    me.end()
                     cv2.destroyAllWindows()
                     pygame.quit()
-                    sys.exit()
+                    exit_program = True
+                    break
+            
+            if exit_program==True:
+                sys.exit()
                 
         async def video_feed(video_feed_on):
             while True:
@@ -73,6 +80,7 @@ if __name__ == '__main__':
                     img = cv2.resize(img, (width,height))
                     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                     img = cv2.flip(img, 0)
+                    img, _, _ = ot.apriltag_center_area(img)                    
                     cv2.imshow('Video Feed', img)
                     cv2.waitKey(1)
                 elif not video_feed_on:

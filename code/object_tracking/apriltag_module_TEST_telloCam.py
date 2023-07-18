@@ -21,7 +21,7 @@ def main():
         img = cv2.flip(img, 0)
         
         # Call the main function from apriltag_detection.py
-        img, center_x, center_y, area = apriltag_center_area(img)
+        img, [center_x, center_y], area = apriltag_center_area(img)
         
         # Display the frame
         cv2.imshow('Tello Cam', img)

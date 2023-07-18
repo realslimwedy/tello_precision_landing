@@ -40,20 +40,28 @@ def keyboard_rc(me, rc_values):
     # Control drone via keyboard
     if get_key('RIGHT'):
         lr = speed
+        print('RIGHT pressed...')
     elif get_key('LEFT'):
         lr = -speed
+        print('LEFT pressed...')
     if get_key('UP'):
         fb = speed
+        print('UP pressed...')
     elif get_key('DOWN'):
         fb = -speed
+        print('DOWN pressed...')
     if get_key('w'):
         ud = speed
+        print('w pressed...')
     elif get_key('s'):
         ud = -speed
+        print('s pressed...')
     if get_key('d'):
         yv = speed
+        print('d pressed...')
     elif get_key('a'):
         yv = -speed
+        print('a ...')
     
     return (lr, fb, ud, yv)
 

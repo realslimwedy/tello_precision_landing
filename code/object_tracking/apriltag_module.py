@@ -27,6 +27,8 @@ def get_args():
     return args
 
 ####################################################################################################
+# matlab pin, check how long substest takes
+
 
 def apriltag_center_area(image):
     args = get_args()
@@ -52,7 +54,10 @@ def apriltag_center_area(image):
 
     # Make a copy of the image for debugging purposes
     debug_image = copy.deepcopy(image)
-
+    
+    # for debugging
+    # debug_image = cv.cvtColor(debug_image, cv.COLOR_BGR2GRAY)
+    
     # Convert the image to grayscale
     image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
 
@@ -63,11 +68,11 @@ def apriltag_center_area(image):
         camera_params=None,
         tag_size=None,
     )
-
-    debug_image, center_x, center_y, area = draw_tags(debug_image, tags)
+    # try sleeping here
+    debug_image, [center_x, center_y], area = draw_tags(debug_image, tags)
 
     # Return the modified image and the required values
-    return debug_image, center_x, center_y, area
+    return debug_image, [center_x, center_y], area
 
 ####################################################################################################
 
@@ -112,7 +117,7 @@ def draw_tags(image, tags):
         center_y = center[1]
 
         
-    return image, center_x, center_y, area
+    return image, [center_x, center_y], area
 
 
 
@@ -129,7 +134,7 @@ def main():
             break
 
         # Call the apriltag_center_area function
-        image, center_x, center_y, area = apriltag_center_area(frame)
+        image, [center_x, center_y], area = apriltag_center_area(frame)
 
         # Display the frame
         cv.imshow('Webcam', image)
