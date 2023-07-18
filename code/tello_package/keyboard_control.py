@@ -20,10 +20,13 @@ def get_key(key_name):
     pygame.display.update()
     return ans
 
-# Translate key input to drone movement
+################################
+
+# DIRECT RC CONTROL IN MANUAL FLIGHT MODE
+
 def keyboard_rc(me, rc_values):
     lr, fb, ud, yv = rc_values
-    speed = 50 
+    speed = 100 
 
     # Start and land drone via keyboard
     if get_key('e') and not me.is_flying:
@@ -54,6 +57,10 @@ def keyboard_rc(me, rc_values):
     
     return (lr, fb, ud, yv)
 
+################################
+
+# VIDEO FEED & CAPTURE
+
 # Save image via keyboard
 def save_image_key_pressed():
     if get_key('SPACE'):
@@ -71,10 +78,37 @@ def video_feed_key_pressed(video_feed_on):
         return True
     return False
 
+# Start and stop video capture via keyboard
+def video_capture_key_pressed(video_capture_on):
+    if get_key('v'):
+        if video_capture_on:
+            print('v pressed: Video capture stopped...')
+        elif not video_capture_on:
+            print('v pressed: Video capture started...')
+        return True
+    return False
 
-def exit_app(me):
+################################
+
+# EXIT APP
+
+def exit_app_key_pressed(me):
     if get_key('ESCAPE'):
         print("ESC pressed: Landing drone and ending program...")
         print(f'Remaining Battery Level: {me.get_battery()} %')
         return True
     return False
+
+################################
+
+# FLIGHT PHASES
+
+def approach_phase_key_pressed():
+    if get_key('5'):
+        print("5 pressed: Approach phase activated...")
+        print(f'Remaining Battery Level: {me.get_battery()} %')
+        return True
+    return False
+
+def safe_landing_key_pressed():
+    pass
