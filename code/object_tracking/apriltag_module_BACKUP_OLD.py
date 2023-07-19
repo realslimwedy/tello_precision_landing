@@ -1,19 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import copy
-import time
 import argparse
-
+import numpy as np
 import cv2 as cv
 from pupil_apriltags import Detector
-
 
 def get_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--device", type=int, default=0)
-    parser.add_argument("--width", help='cap width', type=int, default=640)
-    parser.add_argument("--height", help='cap height', type=int, default=480)
+    parser.add_argument("--width", help='cap width', type=int, default=960)
+    parser.add_argument("--height", help='cap height', type=int, default=540)
 
     parser.add_argument("--families", type=str, default='tag36h11')
     parser.add_argument("--nthreads", type=int, default=1)
@@ -27,11 +25,8 @@ def get_args():
 
     return args
 
-
-def apriltag_center_area(image):
-    # 引数解析 #################################################################
-    args = get_args()
-
+def find_tags(args, image):
+    # Set up the necessary variables and detector
     families = args.families
     nthreads = args.nthreads
     quad_decimate = args.quad_decimate
@@ -40,7 +35,7 @@ def apriltag_center_area(image):
     decode_sharpening = args.decode_sharpening
     debug = args.debug
 
-    # Detector準備 #############################################################
+    # Set up the detector
     at_detector = Detector(
         families=families,
         nthreads=nthreads,
@@ -51,15 +46,7 @@ def apriltag_center_area(image):
         debug=debug,
     )
 
-    elapsed_time = 0
-
-    start_time = time.time()
-
-    # カメラキャプチャ #####################################################
-    debug_image = copy.deepcopy(image)
-
-    # 検出実施 #############################################################
-    image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    # Detect AprilTags in the image
     tags = at_detector.detect(
         image,
         estimate_tag_pose=False,
@@ -67,41 +54,28 @@ def apriltag_center_area(image):
         tag_size=None,
     )
 
-    # 描画 ################################################################
-    debug_image = draw_tags(debug_image, tags, elapsed_time)
+    return tags
 
-    elapsed_time = time.time() - start_time
+def tags_img_center_area(image, tags):
+    center_x = None
+    center_y = None
+    area = None
 
-    # キー処理(ESC：終了) #################################################
-    key = cv.waitKey(1)
-    if key == 27:  # ESC
-        pass
-
-    return debug_image
-
-
-
-def draw_tags(
-    image,
-    tags,
-    elapsed_time,
-):
     for tag in tags:
-        tag_family = tag.tag_family
         tag_id = tag.tag_id
         center = tag.center
         corners = tag.corners
 
-        center = (int(center[0]), int(center[1]))
+        center = (int(tag.center[0]), int(tag.center[1]))
         corner_01 = (int(corners[0][0]), int(corners[0][1]))
         corner_02 = (int(corners[1][0]), int(corners[1][1]))
         corner_03 = (int(corners[2][0]), int(corners[2][1]))
         corner_04 = (int(corners[3][0]), int(corners[3][1]))
 
-        # 中心
-        cv.circle(image, (center[0], center[1]), 5, (0, 0, 255), 2)
+        # Draw the center
+        cv.circle(image, center, 5, (0, 0, 255), 2)
 
-        # 各辺
+        # Draw the tag outline
         cv.line(image, (corner_01[0], corner_01[1]),
                 (corner_02[0], corner_02[1]), (255, 0, 0), 2)
         cv.line(image, (corner_02[0], corner_02[1]),
@@ -111,22 +85,47 @@ def draw_tags(
         cv.line(image, (corner_04[0], corner_04[1]),
                 (corner_01[0], corner_01[1]), (0, 255, 0), 2)
 
-        # タグファミリー、タグID
-        # cv.putText(image,
-        #            str(tag_family) + ':' + str(tag_id),
-        #            (corner_01[0], corner_01[1] - 10), cv.FONT_HERSHEY_SIMPLEX,
-        #            0.6, (0, 255, 0), 1, cv.LINE_AA)
         cv.putText(image, str(tag_id), (center[0] - 10, center[1] - 10),
                    cv.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2, cv.LINE_AA)
 
-    # 処理時間
-    cv.putText(image,
-               "Elapsed Time:" + '{:.1f}'.format(elapsed_time * 1000) + "ms",
-               (10, 30), cv.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2,
-               cv.LINE_AA)
+        # Calculate the area
+        area = cv.contourArea(np.array([corner_01, corner_02, corner_03, corner_04]))
 
-    return image
+        # Update the center point coordinates
+        center_x = center[0]
+        center_y = center[1]
 
+    return image, center_x, center_y, area
+
+def main():
+    cap = cv.VideoCapture(0)  # Use the default webcam (change the index if needed)
+    args = get_args()
+
+    while True:
+        ret, image = cap.read()
+        if not ret:
+            break
+
+        debug_image = copy.deepcopy(image)
+        gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+        tags = find_tags(args, gray_image)
+        debug_image, center_x, center_y, area = tags_img_center_area(debug_image, tags)
+
+        # Display the frame
+        cv.imshow('Webcam', debug_image)
+        cv.waitKey(1)
+
+        # Print the tag ID, center coordinates, and area
+        print("Center X:", center_x)
+        print("Center Y:", center_y)
+        print("Area:", area)
+
+        key = cv.waitKey(1)
+        if key == 27:  # Press Esc to exit
+            break
+
+    cap.release()
+    cv.destroyAllWindows()
 
 if __name__ == '__main__':
     main()
