@@ -26,16 +26,16 @@ def get_key(key_name):
 
 def keyboard_rc(me, rc_values):
     lr, fb, ud, yv = rc_values
-    speed = 100 
+    speed = 50
 
     # Start and land drone via keyboard
     if get_key('e') and not me.is_flying:
         me.takeoff()
-        return (0, 0, 0, 0)
+        return 0, 0, 0, 0
     elif get_key('q') and me.is_flying:
         me.land()
         time.sleep(2)
-        return (0, 0, 0, 0)
+        return 0, 0, 0, 0
     
     # Control drone via keyboard
     if get_key('RIGHT'):
@@ -61,9 +61,9 @@ def keyboard_rc(me, rc_values):
         print('d pressed...')
     elif get_key('a'):
         yv = -speed
-        print('a ...')
+        print('a pressed...')
     
-    return (lr, fb, ud, yv)
+    return lr, fb, ud, yv
 
 ################################
 
@@ -111,7 +111,7 @@ def exit_app_key_pressed(me):
 
 # FLIGHT PHASES
 
-def approach_phase_key_pressed():
+def approach_phase_key_pressed(me):
     if get_key('5'):
         print("5 pressed: Approach phase activated...")
         print(f'Remaining Battery Level: {me.get_battery()} %')

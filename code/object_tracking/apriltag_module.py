@@ -3,6 +3,7 @@
 import copy
 import time
 import argparse
+import numpy as np
 
 import cv2 as cv
 from pupil_apriltags import Detector
@@ -68,7 +69,7 @@ def apriltag_center_area(image):
     )
 
     # 描画 ################################################################
-    debug_image = draw_tags(debug_image, tags, elapsed_time)
+    debug_image, center, area = draw_tags(debug_image, tags, elapsed_time)
 
     elapsed_time = time.time() - start_time
 
@@ -77,7 +78,7 @@ def apriltag_center_area(image):
     if key == 27:  # ESC
         pass
 
-    return debug_image
+    return debug_image, center, area
 
 
 
@@ -86,6 +87,8 @@ def draw_tags(
     tags,
     elapsed_time,
 ):
+    center = None
+    area = None
     for tag in tags:
         tag_family = tag.tag_family
         tag_id = tag.tag_id
@@ -111,6 +114,8 @@ def draw_tags(
         cv.line(image, (corner_04[0], corner_04[1]),
                 (corner_01[0], corner_01[1]), (0, 255, 0), 2)
 
+        area = cv.contourArea(np.array([corner_01, corner_02, corner_03, corner_04]))
+
         # タグファミリー、タグID
         # cv.putText(image,
         #            str(tag_family) + ':' + str(tag_id),
@@ -125,7 +130,7 @@ def draw_tags(
                (10, 30), cv.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2,
                cv.LINE_AA)
 
-    return image
+    return image, center, area
 
 
 if __name__ == '__main__':
