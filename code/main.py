@@ -1,7 +1,13 @@
 import pygame, cv2, time, sys, asyncio
 from djitellopy import tello
+
 import tello_package as tp
 import object_tracking as ot
+
+def display_status(text):
+    font = pygame.font.SysFont(None, 25)
+    status_text = font.render(text, True, (255, 255, 255))
+    screen.blit(status_text, (10, 10))  # Adjust the position as needed
 
 if __name__ == '__main__':
 
@@ -18,6 +24,8 @@ if __name__ == '__main__':
 
     # drone control
     tp.init_keyboard_control()
+    screen = pygame.display.set_mode(res)
+
     rc_params = (0, 0, 0, 0)
 
     # initial connection
@@ -36,20 +44,38 @@ if __name__ == '__main__':
     video_capture_on = False
 
 
+
+
     async def main():
 
         async def show_video_feed():
-            global img
+            global img, auto_pilot
             while True:
                 img = me.get_frame_read().frame
                 img = cv2.resize(img, res)
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 img = cv2.flip(img, 0)
 
                 await asyncio.sleep(1. / 30)
 
-                cv2.imshow('Video Feed', img)
-                cv2.waitKey(1)
+                # video feed via cv2
+                '''img_cv2 = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                cv2.imshow('Video Feed', img_cv2)
+                cv2.waitKey(1)'''
+
+                # video feed via pygame
+                img_py = cv2.flip(img, 1) # flip horizontally
+                img_py = cv2.rotate(img_py, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                img_py = pygame.surfarray.make_surface(img_py)
+                screen.blit(img_py, (0, 0))
+                display_status("Auto Pilot: On" if auto_pilot else "Auto Pilot: Off")
+                pygame.display.flip()
+
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        pygame.quit()
+                        sys.exit()
+
+
 
                 if tp.exit_app_key_pressed(me):
                     if me.is_flying == True:

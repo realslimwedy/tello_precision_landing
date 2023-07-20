@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import copy
-import time
 import argparse
 import numpy as np
 
@@ -52,9 +51,6 @@ def apriltag_center_area(image):
         debug=debug,
     )
 
-    elapsed_time = 0
-
-    start_time = time.time()
 
     # カメラキャプチャ #####################################################
     debug_image = copy.deepcopy(image)
@@ -69,9 +65,7 @@ def apriltag_center_area(image):
     )
 
     # 描画 ################################################################
-    debug_image, center, area = draw_tags(debug_image, tags, elapsed_time)
-
-    elapsed_time = time.time() - start_time
+    debug_image, center, area = draw_tags(debug_image, tags)
 
     # キー処理(ESC：終了) #################################################
     key = cv.waitKey(1)
@@ -85,7 +79,6 @@ def apriltag_center_area(image):
 def draw_tags(
     image,
     tags,
-    elapsed_time,
 ):
     center = None
     area = None
@@ -124,11 +117,6 @@ def draw_tags(
         cv.putText(image, str(tag_id), (center[0] - 10, center[1] - 10),
                    cv.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2, cv.LINE_AA)
 
-    # 処理時間
-    cv.putText(image,
-               "Elapsed Time:" + '{:.1f}'.format(elapsed_time * 1000) + "ms",
-               (10, 30), cv.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2,
-               cv.LINE_AA)
 
     return image, center, area
 
