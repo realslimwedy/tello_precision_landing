@@ -12,7 +12,7 @@ def display_status(text):
 
 if __name__ == '__main__':
 
-    model = YOLO('./object_tracking/yolo_models/yolov8n.pt')
+    model = YOLO('./object_tracking/yolo_models/yolov8n-seg.pt')
 
     width, height = 640, 480
     res = (width, height)
