@@ -1,4 +1,5 @@
 import pygame, cv2, time, sys, asyncio
+from ultralytics import YOLO
 from djitellopy import tello
 
 import tello_package as tp
@@ -11,6 +12,8 @@ def display_status(text):
 
 if __name__ == '__main__':
 
+    model = YOLO('./object_tracking/yolo_models/yolov8n.pt')
+
     width, height = 640, 480
     res = (width, height)
     exit_program = False
@@ -18,7 +21,7 @@ if __name__ == '__main__':
     # autopilot
     flight_phase = None  # takeoff, cruise, approach!, land!
     auto_pilot = False  # manual vs. auto pilot
-    ud_approach_center_area = width * height * 0.2 ** 2  # this needs to be calibrated, different for every resolution(?)
+    ud_approach_center_area = width * height * 0.15 ** 2  # this needs to be calibrated, different for every resolution(?)
     PID = [0.4, 0, 0.4]
     prv_error = (0, 0, 0, 0)
 
@@ -43,8 +46,8 @@ if __name__ == '__main__':
     video_feed_on = False
     video_capture_on = False
 
-#    holistic = mp.solutions.holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5)
- #   hand_model = load_model('hand_gesture_model.h5')
+    #pygame
+    battery_font = pygame.font.SysFont(None, 25)
 
 
     async def main():
@@ -63,7 +66,10 @@ if __name__ == '__main__':
                 cv2.imshow('Video Feed', img_cv2)
                 cv2.waitKey(1)'''
 
-
+                img_yolo = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                yolo_results = model(img_yolo)
+                annotated_yolo_frame = yolo_results[0].plot()
+                cv2.imshow("YOLOv8 Inference", annotated_yolo_frame)
 
                 # video feed via pygame
                 img_py = cv2.flip(img, 1) # flip horizontally
@@ -72,6 +78,10 @@ if __name__ == '__main__':
                 img_py = pygame.surfarray.make_surface(img_py)
                 screen.blit(img_py, (0, 0))
                 display_status("Auto Pilot: On" if auto_pilot else "Auto Pilot: Off")
+                battery_level = me.get_battery()
+                battery_text = battery_font.render(f'Battery Level: {battery_level}%', True, (255, 255, 255))
+                screen.blit(battery_text, (10, 40))  # Adjust the position as needed
+
                 pygame.display.flip()
 
                 for event in pygame.event.get():
