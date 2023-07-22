@@ -43,7 +43,8 @@ if __name__ == '__main__':
     video_feed_on = False
     video_capture_on = False
 
-
+#    holistic = mp.solutions.holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+ #   hand_model = load_model('hand_gesture_model.h5')
 
 
     async def main():
@@ -62,9 +63,12 @@ if __name__ == '__main__':
                 cv2.imshow('Video Feed', img_cv2)
                 cv2.waitKey(1)'''
 
+
+
                 # video feed via pygame
                 img_py = cv2.flip(img, 1) # flip horizontally
                 img_py = cv2.rotate(img_py, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
                 img_py = pygame.surfarray.make_surface(img_py)
                 screen.blit(img_py, (0, 0))
                 display_status("Auto Pilot: On" if auto_pilot else "Auto Pilot: Off")
@@ -74,8 +78,6 @@ if __name__ == '__main__':
                     if event.type == pygame.QUIT:
                         pygame.quit()
                         sys.exit()
-
-
 
                 if tp.exit_app_key_pressed(me):
                     if me.is_flying == True:
