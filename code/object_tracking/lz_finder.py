@@ -281,6 +281,7 @@ class LzFinder:
             # print("C1 and C2  do not overlap")
 
 if __name__="main":
+    model = YOLO('./object_tracking/yolo_models/yolov8n.pt')
     objectDetector = ObjectDetector()
     segEngine = SegmentationEngine()
 

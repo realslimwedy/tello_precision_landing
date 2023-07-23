@@ -12,7 +12,8 @@ def display_status(text):
 
 if __name__ == '__main__':
 
-    model = YOLO('./object_tracking/yolo_models/yolov8n-seg.pt')
+    model = YOLO('./object_tracking/yolo_models/yolov8n.pt')
+    objectDetector = ot.ObjectDetector(model)
 
     width, height = 640, 480
     res = (width, height)
@@ -53,7 +54,7 @@ if __name__ == '__main__':
     async def main():
 
         async def show_video_feed():
-            global img, auto_pilot
+            global img, auto_pilot, model, height, width
             while True:
                 img = me.get_frame_read().frame
                 img = cv2.resize(img, res)
@@ -66,13 +67,18 @@ if __name__ == '__main__':
                 cv2.imshow('Video Feed', img_cv2)
                 cv2.waitKey(1)'''
 
-                img_yolo = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                yolo_results = model(img_yolo)
+                #img_yolo = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+                img_yolo, obstacles = objectDetector.infer_image(
+                    height, width, img)
+                #eobjectDetector.show_image(img_yolo)
+
+                '''yolo_results = model(img_yolo)
                 annotated_yolo_frame = yolo_results[0].plot()
-                cv2.imshow("YOLOv8 Inference", annotated_yolo_frame)
+                cv2.imshow("YOLOv8 Inference", annotated_yolo_frame)'''
 
                 # video feed via pygame
-                img_py = cv2.flip(img, 1) # flip horizontally
+                img_py = cv2.flip(img_yolo, 1) # flip horizontally
                 img_py = cv2.rotate(img_py, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
                 img_py = pygame.surfarray.make_surface(img_py)
