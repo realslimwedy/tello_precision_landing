@@ -4,6 +4,7 @@ import cv2 as cv
 from scipy.spatial import distance
 from scipy.ndimage.filters import gaussian_filter
 from labels import datasetLabels, risk_table
+from yolo_util import ObjectDetector
 
 class LzFinder:
     def __init__(self, dataset):
@@ -280,8 +281,8 @@ class LzFinder:
             # print("C1 and C2  do not overlap")
 
 if __name__="main":
-    objectDetector = ObjectDetector(PATH_TO_MODEL)
-    segEngine = SegmentationEngine(PATH_TO_MODEL)
+    objectDetector = ObjectDetector()
+    segEngine = SegmentationEngine()
 
     #start webcam
     cap = cv.VideoCapture(0)
@@ -292,8 +293,10 @@ if __name__="main":
         height, width, _ = img.shape
         if not ret:
             break
+
         segImg= segEngine.segment(img)
         segImg=np.array(segImg)
+
         _, objs = objectDetector.infer_image(height, width, img)
         obstacles = []
         for obstacle in objs:

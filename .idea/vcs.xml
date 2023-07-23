@@ -3,8 +3,5 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$/../../.." vcs="Git" />
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/Tello-Python" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/code/object_tracking/yoloV8_testing/Real-Time-Object-Tracking-with-DeepSORT-and-YOLOv8" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/code/object_tracking/yoloV8_testing/supervision" vcs="Git" />
   </component>
 </project>

@@ -23,3 +23,20 @@ class bidict(dict):
         if self[key] in self.inverse and not self.inverse[self[key]]:
             del self.inverse[self[key]]
         super(bidict, self).__delitem__(key)
+
+if __name__ == "__main__":
+    bd = bidict({'a': 1, 'b': 2})
+    print(bd)  # {'a': 1, 'b': 2}
+    print(bd.inverse)  # {1: ['a'], 2: ['b']}
+    bd['c'] = 1  # Now two keys have the same value (= 1)
+    print(bd)  # {'a': 1, 'c': 1, 'b': 2}
+    print(bd.inverse)  # {1: ['a', 'c'], 2: ['b']}
+    del bd['c']
+    print(bd)  # {'a': 1, 'b': 2}
+    print(bd.inverse)  # {1: ['a'], 2: ['b']}
+    del bd['a']
+    print(bd)  # {'b': 2}
+    print(bd.inverse)  # {2: ['b']}
+    bd['b'] = 3
+    print(bd)  # {'b': 3}
+    print(bd.inverse)  # {2: [], 3: ['b']}
