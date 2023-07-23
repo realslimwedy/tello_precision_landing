@@ -12,8 +12,9 @@ def display_status(text):
 
 if __name__ == '__main__':
 
-    model = YOLO('./object_tracking/yolo_models/yolov8n.pt')
-    objectDetector = ot.ObjectDetector(model)
+    model_obj_det = YOLO('./object_tracking/yolo_models/yolov8n.pt')
+    #model_seg = YOLO('./object_tracking/yolo_models/yolov8n-seg.pt')
+    objectDetector = ot.ObjectDetector(model_obj_det)
 
     width, height = 640, 480
     res = (width, height)
@@ -54,7 +55,7 @@ if __name__ == '__main__':
     async def main():
 
         async def show_video_feed():
-            global img, auto_pilot, model, height, width
+            global img, auto_pilot, model_obj_det, height, width
             while True:
                 img = me.get_frame_read().frame
                 img = cv2.resize(img, res)

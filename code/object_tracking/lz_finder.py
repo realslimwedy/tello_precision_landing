@@ -1,10 +1,14 @@
 import math
+import sys
+
 import numpy as np
 import cv2 as cv
 from scipy.spatial import distance
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 from labels import datasetLabels, risk_table
-from yolo_util import ObjectDetector
+from yolo_obj_det_util import ObjectDetector
+from yolo_seg_util import SegmentationEngine
+from ultralytics import YOLO
 
 class LzFinder:
     def __init__(self, dataset):
@@ -131,8 +135,8 @@ class LzFinder:
     def _get_risk_map(self, seg_img, gaussian_sigma=25):
         image = seg_img
         risk_array = image.astype("float32") # also needed for yolo seg?
-        for label in self.labels:
-            np.where(risk_array == self.labels[label], risk_table[label], risk_array)
+        '''for label in self.labels:
+            np.where(risk_array == self.labels[label], risk_table[label], risk_array)'''
         risk_array = gaussian_filter(risk_array, sigma=gaussian_sigma)
         risk_array = (risk_array / risk_array.max()) * 255
         risk_array = np.uint8(risk_array)
@@ -280,14 +284,18 @@ class LzFinder:
             return -1
             # print("C1 and C2  do not overlap")
 
-if __name__="main":
-    model = YOLO('./object_tracking/yolo_models/yolov8n.pt')
-    objectDetector = ObjectDetector()
-    segEngine = SegmentationEngine()
+if __name__=="__main__":
+    model_obj_det = YOLO('./object_tracking/yolo_models/yolov8n.pt')
+    model_seg = YOLO('./object_tracking/yolo_models/yolov8n-seg.pt')
+    print('models loaded')
+    objectDetector = ObjectDetector(model_obj_det)
+    segEngine = SegmentationEngine(model_seg)
+    print('engines loaded')
 
     #start webcam
     cap = cv.VideoCapture(0)
     posOb= [0, 0, 0, 0]
+
 
     while True:
         ret, img = cap.read()
@@ -295,12 +303,18 @@ if __name__="main":
         if not ret:
             break
 
-        segImg= segEngine.segment(img)
+
+        segImg= segEngine.inferImage(img)
         segImg=np.array(segImg)
+        print('Images infered via segmentation engine')
 
         _, objs = objectDetector.infer_image(height, width, img)
+        print('Images infered via object detector')
+
         obstacles = []
+
         for obstacle in objs:
+            print('LOOP STARTED')
             print(obstacle)
             pos0b = obstacle.get("box")
             minDist = 100
@@ -309,7 +323,7 @@ if __name__="main":
                 [int(posOb[0] + w / 2), int(posOb[1] + h / 2), minDist]
             )
 
-        lzFinder= LzFinder("aeroscapes")
+        lzFinder= LzFinder("yolo")
         lzs_ranked, risk_map = lzFinder.get_ranked_lz(obstacles, img, segImg)
         img = lzFinder.draw_lzs_obs(lzs_ranked[-5:], obstacles, img)
 
