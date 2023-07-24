@@ -3,10 +3,14 @@ import cv2 as cv
 import numpy as np
 
 class ObjectDetector():
-    def __init__(self,model):
+    def __init__(self,model_obj_det):
         self.labels={0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 4: 'airplane', 5: 'bus', 6: 'train', 7: 'truck', 8: 'boat', 9: 'traffic light', 10: 'fire hydrant', 11: 'stop sign', 12: 'parking meter', 13: 'bench', 14: 'bird', 15: 'cat', 16: 'dog', 17: 'horse', 18: 'sheep', 19: 'cow', 20: 'elephant', 21: 'bear', 22: 'zebra', 23: 'giraffe', 24: 'backpack', 25: 'umbrella', 26: 'handbag', 27: 'tie', 28: 'suitcase', 29: 'frisbee', 30: 'skis', 31: 'snowboard', 32: 'sports ball', 33: 'kite', 34: 'baseball bat', 35: 'baseball glove', 36: 'skateboard', 37: 'surfboard', 38: 'tennis racket', 39: 'bottle', 40: 'wine glass', 41: 'cup', 42: 'fork', 43: 'knife', 44: 'spoon', 45: 'bowl', 46: 'banana', 47: 'apple', 48: 'sandwich', 49: 'orange', 50: 'broccoli', 51: 'carrot', 52: 'hot dog', 53: 'pizza', 54: 'donut', 55: 'cake', 56: 'chair', 57: 'couch', 58: 'potted plant', 59: 'bed', 60: 'dining table', 61: 'toilet', 62: 'tv', 63: 'laptop', 64: 'mouse', 65: 'remote', 66: 'keyboard', 67: 'cell phone', 68: 'microwave', 69: 'oven', 70: 'toaster', 71: 'sink', 72: 'refrigerator', 73: 'book', 74: 'clock', 75: 'vase', 76: 'scissors', 77: 'teddy bear', 78: 'hair drier', 79: 'toothbrush'}
-        self.model = model
+        self.model_obj_det = model_obj_det
         self.color = [0, 255, 0]
+
+    def __str__(self):
+        return f"ObjectDetector instance with model: {self.model_obj_det}"
+
     def show_image(self,img):
         cv.imshow("YOLOv8 Inference", img)
         cv.waitKey(1)
@@ -84,7 +88,7 @@ class ObjectDetector():
             classids=None,
             idxs=None,
             infer=True,
-            confidence=0.1,
+            confidence=0.25,
             threshold=0.3,
             drawBoxes=True,
     ):
@@ -95,8 +99,8 @@ class ObjectDetector():
         '''
 
         if infer:
-
-            results= self.model(img)
+            self.model_obj_det.predict(img, classes=[0,46,47,73],verbose=False)
+            results= self.model_obj_det(img)
 
             # Generate the boxes, confidences, and classIDs
             boxes, confidences, classids = self.generate_boxes_confidences_classids(
@@ -125,8 +129,8 @@ class ObjectDetector():
 
 
 if __name__ == '__main__':
-    model = YOLO('./object_tracking/yolo_models/yolov8n.pt')
-    objectDetector = ObjectDetector(model)
+    model_obj_det = YOLO('./object_tracking/yolo_models/yolov8n.pt')
+    objectDetector = ObjectDetector(model_obj_det)
     cap = cv.VideoCapture(0)
 
     while True:

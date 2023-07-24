@@ -8,13 +8,18 @@ class SegmentationEngine():
     def __init__(self, model):
         self.model = model
 
+    def __str__(self):
+        return f"SegmentationEngine instance with model: {self.model}"
+
     def inferImage(self, img):
         width, height = img.shape[1], img.shape[0]
+        self.model.predict(img, classes=[0,46,47,73],verbose=False)
         results = self.model(img)
         boxes = results[0].boxes
         masks = results[0].masks
 
-        output_array = np.zeros((height, width), dtype=int)
+        output_array = np.full((height, width),-1, dtype=int)
+        # '-1' for unlabelled pixels because '0' implies class 'person' in YOLOv8
 
         for i in range(len(boxes)):
             cls = int(boxes[i].cls.tolist()[0])
@@ -25,16 +30,27 @@ class SegmentationEngine():
                     if val == 1:
                         output_array[y,x] = cls
 
-        output_image = Image.fromarray(output_array.astype('uint8'))
+        # save output_array as txt file
+        np.savetxt('pred_mask.txt', output_array.reshape(-1), delimiter=',', fmt='%d')
 
-        return output_image
+        output_array = np.array(output_array, dtype=np.uint8)
+        # save output_array as txt file
+        np.savetxt('pred_mask_II.txt', output_array.reshape(-1), delimiter=',', fmt='%d')
+
+        return output_array
 
 
 if __name__ == "__main__":
-    model = model = YOLO('./object_tracking/yolo_models/yolov8n-seg.pt')
+    model = YOLO('./object_tracking/yolo_models/yolov8n-seg.pt')
     segEngine = SegmentationEngine(model)
 
     cap = cv.VideoCapture(0)
+
+    if not cap.isOpened():
+        print("Error: Unable to access the camera.")
+        cap.release()
+        cv.destroyAllWindows()
+        exit()
 
     '''ret, frame = cap.read()
     frame = cv.resize(frame, (640, 480))
@@ -50,20 +66,14 @@ if __name__ == "__main__":
 
     while True:
         ret, frame = cap.read()
+        if not ret:
+            print("Error: Failed to retrieve a frame from the camera.")
+            break
         frame = cv.resize(frame, (640, 480))
-        pred_mask = segEngine.inferImage(frame)
 
-        # Find the maximum value in pred_mask
-        max_value = np.amax(pred_mask)
+        segImg = segEngine.inferImage(frame)
 
-        # Normalize pred_mask to a scale of 0 to 255
-        pred_mask_normalized = (pred_mask / max_value) * 255
-
-        # Convert pred_mask_normalized to an 8-bit unsigned integer array
-        pred_mask_normalized = pred_mask_normalized.astype(np.uint8)
-
-        # Show pred continuously in a window
-        cv.imshow('frame', pred_mask_normalized)
+        cv.imshow('frame', segImg)
 
         # Press q to quit
         if cv.waitKey(1) & 0xFF == ord('q'):

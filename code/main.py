@@ -12,9 +12,9 @@ def display_status(text):
 
 if __name__ == '__main__':
 
-    model_obj_det = YOLO('./object_tracking/yolo_models/yolov8n.pt')
+    #model_obj_det = YOLO('./object_tracking/yolo_models/yolov8n.pt')
     #model_seg = YOLO('./object_tracking/yolo_models/yolov8n-seg.pt')
-    objectDetector = ot.ObjectDetector(model_obj_det)
+    #objectDetector = ot.ObjectDetector(model_obj_det)
 
     width, height = 640, 480
     res = (width, height)
@@ -70,16 +70,14 @@ if __name__ == '__main__':
 
                 #img_yolo = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-                img_yolo, obstacles = objectDetector.infer_image(
-                    height, width, img)
-                #eobjectDetector.show_image(img_yolo)
+                #img_yolo, obstacles = objectDetector.infer_image(height, width, img)
 
                 '''yolo_results = model(img_yolo)
                 annotated_yolo_frame = yolo_results[0].plot()
                 cv2.imshow("YOLOv8 Inference", annotated_yolo_frame)'''
 
                 # video feed via pygame
-                img_py = cv2.flip(img_yolo, 1) # flip horizontally
+                img_py = cv2.flip(img, 1) # flip horizontally
                 img_py = cv2.rotate(img_py, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
                 img_py = pygame.surfarray.make_surface(img_py)

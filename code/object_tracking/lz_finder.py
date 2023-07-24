@@ -1,5 +1,5 @@
 import math
-import sys
+import time
 
 import numpy as np
 import cv2 as cv
@@ -10,22 +10,31 @@ from yolo_obj_det_util import ObjectDetector
 from yolo_seg_util import SegmentationEngine
 from ultralytics import YOLO
 
+
 class LzFinder:
     def __init__(self, dataset):
-        self.dataset=dataset
+        self.dataset = dataset
         try:
             self.labels = datasetLabels[dataset]
         except:
             raise KeyError("Unsupported dataset name. Check your spelling.")
 
-    def get_ranked_lz(
-            self, obstacles, img, segImg, height=None, r_landing=120, stride=75, id=None, use_seg=True
-    ):  # r_landing to be measured in pixels by testing
-        # TODO: use height of drone to tune size of possible landing zones
+    def __str__(self):
+        return f"LzFinder instance with dataset: {self.labels}"
+
+
+
+    def get_ranked_lz(self, obstacles, img, segImg, r_landing=80, stride=75, id=None, use_seg=False):
 
         lzs = self._get_landing_zones_proposals(obstacles, stride, r_landing, img, id)
-        risk_map = self._get_risk_map(segImg)
-        lzs_ranked = self._rank_lzs(lzs, risk_map,obstacles)
+
+        if use_seg:
+            risk_map = self._get_risk_map(segImg)
+            lzs_ranked = self._rank_lzs(lzs, risk_map, obstacles)
+        else:
+            risk_map = np.zeros(segImg.shape, np.uint8)
+            lzs_ranked = self._rank_lzs(lzs, risk_map, obstacles, weightRisk=0)
+
         return lzs_ranked, risk_map
 
     def _dist_to_obs(self, lz, obstacles, img):
@@ -36,7 +45,7 @@ class LzFinder:
         else:
             for ob in obstacles:
                 dist = self.getDistance(img, (ob[0], ob[1]), posLz)
-                norm_dists.append(1-dist)
+                norm_dists.append(1 - dist)
             return np.mean(norm_dists)
 
     def _meets_min_safety_requirement(cls, zone_proposed, obstacles_list):
@@ -59,8 +68,9 @@ class LzFinder:
                 return False
         return True
 
-    def _get_landing_zones_proposals(self, high_risk_obstacles, stride, r_landing, image, id): # unsure what id is for
-        """Returns list of lzs proposal based that meet the min safe distance of all the high risk obstacles
+    def _get_landing_zones_proposals(self, high_risk_obstacles, stride, r_landing, image, id):
+        """Returns list of lzs proposal based that meet the
+        min safe distance of all the high risk obstacles
 
         :param high_risk_obstacles: tuple in the following format (x,y,min_safe_dist)
         :type high_risk_obstacles: tuple
@@ -86,10 +96,10 @@ class LzFinder:
                 if not self._meets_min_safety_requirement(
                         lzProposed, high_risk_obstacles
                 ):
-                    lzProposed["confidence"] = 0 # NaN means safe, zero means unsafe
+                    lzProposed["confidence"] = 0  # NaN means safe, zero means unsafe
                 zones_proposed.append(lzProposed)
-        return zones_proposed
 
+        return zones_proposed
 
     def _get_risk_map_slow(self, seg_img, windowsize, gaussian_sigma=7):
         risk_r = int(seg_img.shape[0] / windowsize)
@@ -131,18 +141,25 @@ class LzFinder:
             risk_level += ratio_label * risk_table[label].value
         return risk_level
 
+    def _get_risk_map(self, seg_array, gaussian_sigma=25):
+        '''
+        Obtain a risk map based on the segmentation image with values from 0 to 255
+        :param seg_img: each pixel carries the numeric class label
+        '''
+        seg_array_float32 = seg_array.astype("float32")  # Convert seg_img to float32
+        risk_array = seg_array_float32.copy()  # Make a copy of the image to use for risk_array
 
-    def _get_risk_map(self, seg_img, gaussian_sigma=25):
-        image = seg_img
-        risk_array = image.astype("float32") # also needed for yolo seg?
-        '''for label in self.labels:
-            np.where(risk_array == self.labels[label], risk_table[label], risk_array)'''
+        for label in self.labels:
+            risk_value = np.float32(risk_table[label])
+            risk_array = np.where(risk_array == self.labels[label], risk_value, risk_array)
+
         risk_array = gaussian_filter(risk_array, sigma=gaussian_sigma)
-        risk_array = (risk_array / risk_array.max()) * 255
+        risk_array = (risk_array / 100) * 255
         risk_array = np.uint8(risk_array)
-        return risk_array
 
-    def _risk_map_eval_basic(self, img, areaLz):
+        return risk_array  # returns a risk map with values from 0 to 255
+
+    def _risk_map_eval_basic(self, crop_array, areaLz):
         """Evaluate normalised risk in a lz
 
         :param img: risk map containing pixels between 0 (low risk) and 255 (high risk)
@@ -153,40 +170,46 @@ class LzFinder:
         :rtype: float
         """
         maxRisk = areaLz * 255
-        totalRisk = np.sum(img)
-        return 1 - (totalRisk / maxRisk)
+        cropRisk = np.sum(crop_array)
+        return 1 - (cropRisk / maxRisk)
 
     def _rank_lzs(self, lzsProposals, riskMap, obstacles, weightDist=5, weightRisk=15, weightOb=5):
-        for lz in lzsProposals:
+
+        ranked_lzs = []
+
+        for lz in lzsProposals: # this loop writes new confidence values to the lzsProposals list elements
 
             lzRad = lz.get("radius")
             lzPos = lz.get("position")
-            mask = np.zeros_like(riskMap) #  this is a numpy array of zeros with the same shape as riskMap
-            mask = cv.circle(mask, (lzPos[0], lzPos[1]), lzRad, (255, 255, 255), -1) # cirlce drawn on mask, green, filled
+            mask = np.zeros_like(riskMap)  # this is a numpy array of zeros with the same shape as riskMap
+            mask = cv.circle(mask, (lzPos[0], lzPos[1]), lzRad, (255, 255, 255), -1) #-1 means filled
+            # cirlce drawn on mask, green, filled
+
             areaLz = math.pi * lzRad * lzRad
-            crop = cv.bitwise_and(riskMap, mask) # returns crop
+
+            crop = cv.bitwise_and(riskMap, mask)  # this leaves only the circle in the risk map
+            # each pixel contains the risk value (0-255) of the risk map
 
             riskFactor, distanceFactor, obFactor = 0, 0, 0
-            if weightRisk != 0:
-                riskFactor = self._risk_map_eval_basic(crop, areaLz)
-            if weightDist != 0:
-                distanceFactor = self.getDistanceCenter(riskMap, (lzPos[0], lzPos[1]))
-            if weightOb != 0:
-                obFactor = self._dist_to_obs(lz, obstacles, riskMap)
 
-            if math.isnan(lz["confidence"]):
+            if weightRisk != 0:
+                riskFactor = self._risk_map_eval_basic(crop, areaLz) # higher value means lower risk
+            if weightDist != 0:
+                distanceFactor = self.getDistanceCenter(riskMap, (lzPos[0], lzPos[1])) # higher value means closer to center
+            if weightOb != 0:
+                obFactor = self._dist_to_obs(lz, obstacles, riskMap) # higher value means further from obstacles
+
+            if math.isnan(lz["confidence"]): # confidence actually means how well the lz meets the requirements
                 # Calculate the confidence value and set it in the lz dictionary
                 total_weight = weightRisk + weightDist + weightOb
                 lz["confidence"] = abs(
                     (weightRisk * riskFactor + weightDist * distanceFactor + weightOb * obFactor) / total_weight)
 
-            '''if lz["confidence"] is math.nan:
-                lz["confidence"] = abs((
-                                           weightRisk * riskFactor + weightDist * distanceFactor + weightOb * obFactor
-                                   ) / (weightRisk + weightDist + weightOb))
-                xxx = 0'''
+            if lz["confidence"] != 0:
+                ranked_lzs.append(lz)
 
-        lzsSorted = sorted(lzsProposals, key=lambda k: k["confidence"])
+        lzsSorted = sorted(ranked_lzs, key=lambda k: k["confidence"])
+
         return lzsSorted
 
     def getDistanceCenter(self, img, pt):
@@ -202,7 +225,7 @@ class LzFinder:
         dim = img.shape
         furthestDistance = math.hypot(dim[0] / 2, dim[1] / 2)
         dist = distance.euclidean(pt, [dim[0] / 2, dim[1] / 2])
-        return 1 - abs(dist / furthestDistance)
+        return 1 - abs(dist / furthestDistance) # higher value means closer to center
 
     def getDistance(self, img, pt1, pt2):
         """Finds Normalised Distance between a two points
@@ -217,10 +240,10 @@ class LzFinder:
         dim = img.shape
         furthestDistance = math.hypot(dim[0], dim[1])
         dist = distance.euclidean(pt1, pt2)
-        return 1 - abs(dist / furthestDistance) # 1 minus because we want to maximise the distance???
+        return 1 - abs(dist / furthestDistance)  # 1 minus because we want to maximise the distance???
 
     @classmethod
-    def draw_lzs_obs(cls, list_lzs, list_obs, img, thickness=3):
+    def draw_lzs_obs(cls, list_lzs, list_obs, img, thickness=2):
         """Adds annotation on image and landing zone proposals for visualisation
 
         :param list_lzs: list of lzs int the lz data struct
@@ -284,51 +307,83 @@ class LzFinder:
             return -1
             # print("C1 and C2  do not overlap")
 
-if __name__=="__main__":
+##############################################################################################################
+
+
+
+if __name__ == "__main__":
     model_obj_det = YOLO('./object_tracking/yolo_models/yolov8n.pt')
     model_seg = YOLO('./object_tracking/yolo_models/yolov8n-seg.pt')
-    print('models loaded')
+
     objectDetector = ObjectDetector(model_obj_det)
     segEngine = SegmentationEngine(model_seg)
-    print('engines loaded')
+    lzFinder = LzFinder("yolo")
 
-    #start webcam
     cap = cv.VideoCapture(0)
-    posOb= [0, 0, 0, 0]
 
+    posOb = [0, 0, 0, 0]
+    prev_landing_zone_xy = []
 
     while True:
-        ret, img = cap.read()
-        height, width, _ = img.shape
+        start_time = time.time()
+        ret, frame = cap.read()
         if not ret:
+            print("Error: Failed to retrieve a frame from the camera.")
             break
+        frame = cv.resize(frame, (640, 480))
+        height, width, _ = frame.shape
 
+        _, objs = objectDetector.infer_image(height, width, frame)
 
-        segImg= segEngine.inferImage(img)
-        segImg=np.array(segImg)
-        print('Images infered via segmentation engine')
-
-        _, objs = objectDetector.infer_image(height, width, img)
-        print('Images infered via object detector')
+        segImg = segEngine.inferImage(frame)
 
         obstacles = []
 
         for obstacle in objs:
-            print('LOOP STARTED')
-            print(obstacle)
-            pos0b = obstacle.get("box")
-            minDist = 100
+            posOb = obstacle.get("box")
+            minDist = 123
             w, h = posOb[2], posOb[3]
             obstacles.append(
-                [int(posOb[0] + w / 2), int(posOb[1] + h / 2), minDist]
+                [int(posOb[0] + w / 2),
+                 int(posOb[1] + h / 2),
+                 minDist]
             )
 
-        lzFinder= LzFinder("yolo")
-        lzs_ranked, risk_map = lzFinder.get_ranked_lz(obstacles, img, segImg)
-        img = lzFinder.draw_lzs_obs(lzs_ranked[-5:], obstacles, img)
+        lzs_ranked, risk_map = lzFinder.get_ranked_lz(obstacles, frame, segImg,use_seg=True)
+        if lzs_ranked:
+            landing_zone = lzs_ranked[-1]
+            landing_zone_xy = landing_zone["position"]
+            print(landing_zone_xy)  # tuple, e.g. (230, 380)
 
-        cv.imshow("best landing zones", cv.applyColorMap(risk_map, cv.COLORMAP_JET))
-        cv.waitKey(0)
-        cv.imshow("best landing zones", img)
-        cv.waitKey(0)
-        cv.destroyAllWindows()
+            # Append the current landing_zone_xy to the list
+            prev_landing_zone_xy.append(landing_zone_xy)
+
+            # Keep only the last 3 values in the list
+            if len(prev_landing_zone_xy) > 3:
+                prev_landing_zone_xy = prev_landing_zone_xy[-3:]
+
+            # Calculate the average of the previous 3 landing_zone_xy values
+            avg_landing_zone_xy = (
+                sum(xy[0] for xy in prev_landing_zone_xy) // len(prev_landing_zone_xy),
+                sum(xy[1] for xy in prev_landing_zone_xy) // len(prev_landing_zone_xy)
+            )
+
+            print("Average landing_zone_xy of previous 3 iterations:", avg_landing_zone_xy)
+
+            img = lzFinder.draw_lzs_obs(lzs_ranked[-1:], obstacles, frame)  # if no lz, nothing is drawn
+
+            cv.imshow("RISK MAP", cv.applyColorMap(risk_map, cv.COLORMAP_JET))  # COLORMAP_JET
+            cv.imshow("best landing zones", img)
+
+        else:
+            print("No landing zone found")
+
+        end_time = time.time()  # End time of the iteration
+        elapsed_time_ms = (end_time - start_time) * 1000
+        print("Time taken for this iteration: {:.2f} ms".format(elapsed_time_ms))
+
+        if cv.waitKey(1) & 0xFF == ord('q'):
+            break
+
+
+
