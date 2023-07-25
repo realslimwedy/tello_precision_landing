@@ -1,81 +1,75 @@
 import cv2 as cv
 from ultralytics import YOLO
 import numpy as np
-from PIL import Image
-from matplotlib import pyplot as plt
+
 
 class SegmentationEngine():
-    def __init__(self, model):
+    def __init__(self, model,label_ids):
         self.model = model
+        self.label_ids = label_ids
 
     def __str__(self):
         return f"SegmentationEngine instance with model: {self.model}"
 
     def inferImage(self, img):
         width, height = img.shape[1], img.shape[0]
-        self.model.predict(img, classes=[0,46,47,73],verbose=False)
+
+        self.model.predict(source=img, verbose=False, classes=self.label_ids)
+
         results = self.model(img)
         boxes = results[0].boxes
         masks = results[0].masks
 
-        output_array = np.full((height, width),-1, dtype=int)
+        output_array = np.full((height, width), -1, dtype=int)
         # '-1' for unlabelled pixels because '0' implies class 'person' in YOLOv8
 
         for i in range(len(boxes)):
             cls = int(boxes[i].cls.tolist()[0])
             mask_data = masks.data[i].tolist()
 
+            # Get the height and width from the shape of the masks tensor
+            mask_height, mask_width = masks.shape[1], masks.shape[2]
+
+            # Calculate scaling factors
+            scale_x = width / mask_width
+            scale_y = height / mask_height
+
             for y, row in enumerate(mask_data):
                 for x, val in enumerate(row):
                     if val == 1:
-                        output_array[y,x] = cls
-
-        # save output_array as txt file
-        np.savetxt('pred_mask.txt', output_array.reshape(-1), delimiter=',', fmt='%d')
+                        # Scale the coordinates back to the original image resolution
+                        scaled_x = int(x * scale_x)
+                        scaled_y = int(y * scale_y)
+                        if scaled_x < width and scaled_y < height:
+                            output_array[scaled_y, scaled_x] = cls
 
         output_array = np.array(output_array, dtype=np.uint8)
-        # save output_array as txt file
-        np.savetxt('pred_mask_II.txt', output_array.reshape(-1), delimiter=',', fmt='%d')
 
         return output_array
 
 
 if __name__ == "__main__":
-    model = YOLO('./object_tracking/yolo_models/yolov8n-seg.pt')
-    segEngine = SegmentationEngine(model)
+    label_list = ["apple", "banana", "background", "book", "person"]
+    labels = {key: value for key, value in labelsYolo.items() if key in label_list}
+    label_ids = list(labels.values())
+
+    model = YOLO('yolo_models/yolov8n-seg.pt')
+    segEngine = SegmentationEngine(model, label_ids)
 
     cap = cv.VideoCapture(0)
 
-    if not cap.isOpened():
-        print("Error: Unable to access the camera.")
-        cap.release()
-        cv.destroyAllWindows()
-        exit()
-
-    '''ret, frame = cap.read()
-    frame = cv.resize(frame, (640, 480))
-    pred_mask = segEngine.inferImage(frame)
-    pred_mask_np = np.array(pred_mask)
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
-    ax1.imshow(frame[:, :, ::-1])
-    ax1.set_title("Picture")
-    ax2.imshow(pred_mask_np, cmap='gray')
-    ax2.set_title("Prediction")
-    ax2.set_axis_off()
-    plt.show()'''
 
     while True:
         ret, frame = cap.read()
         if not ret:
             print("Error: Failed to retrieve a frame from the camera.")
             break
-        frame = cv.resize(frame, (640, 480))
+        frame = cv.resize(frame, (320, 240)) #640, 480 vs. 320, 240
 
         segImg = segEngine.inferImage(frame)
 
         cv.imshow('frame', segImg)
 
-        # Press q to quit
         if cv.waitKey(1) & 0xFF == ord('q'):
             break
 

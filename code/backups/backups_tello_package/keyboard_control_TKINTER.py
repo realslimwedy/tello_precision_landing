@@ -1,4 +1,4 @@
-# this is the keyboard_control.py file
+# this is the keyboard_module.py file
 
 import time
 import tkinter as tk

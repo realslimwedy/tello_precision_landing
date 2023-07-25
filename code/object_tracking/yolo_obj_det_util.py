@@ -1,15 +1,17 @@
 from ultralytics import YOLO
 import cv2 as cv
+from .labels import labelsYolo
 import numpy as np
 
 class ObjectDetector():
-    def __init__(self,model_obj_det):
-        self.labels={0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 4: 'airplane', 5: 'bus', 6: 'train', 7: 'truck', 8: 'boat', 9: 'traffic light', 10: 'fire hydrant', 11: 'stop sign', 12: 'parking meter', 13: 'bench', 14: 'bird', 15: 'cat', 16: 'dog', 17: 'horse', 18: 'sheep', 19: 'cow', 20: 'elephant', 21: 'bear', 22: 'zebra', 23: 'giraffe', 24: 'backpack', 25: 'umbrella', 26: 'handbag', 27: 'tie', 28: 'suitcase', 29: 'frisbee', 30: 'skis', 31: 'snowboard', 32: 'sports ball', 33: 'kite', 34: 'baseball bat', 35: 'baseball glove', 36: 'skateboard', 37: 'surfboard', 38: 'tennis racket', 39: 'bottle', 40: 'wine glass', 41: 'cup', 42: 'fork', 43: 'knife', 44: 'spoon', 45: 'bowl', 46: 'banana', 47: 'apple', 48: 'sandwich', 49: 'orange', 50: 'broccoli', 51: 'carrot', 52: 'hot dog', 53: 'pizza', 54: 'donut', 55: 'cake', 56: 'chair', 57: 'couch', 58: 'potted plant', 59: 'bed', 60: 'dining table', 61: 'toilet', 62: 'tv', 63: 'laptop', 64: 'mouse', 65: 'remote', 66: 'keyboard', 67: 'cell phone', 68: 'microwave', 69: 'oven', 70: 'toaster', 71: 'sink', 72: 'refrigerator', 73: 'book', 74: 'clock', 75: 'vase', 76: 'scissors', 77: 'teddy bear', 78: 'hair drier', 79: 'toothbrush'}
-        self.model_obj_det = model_obj_det
+    def __init__(self, model, labelsYolo, label_ids):
+        self.labels_inverted={value: key for key, value in labelsYolo.items()}
+        self.label_ids=label_ids
+        self.model = model
         self.color = [0, 255, 0]
 
     def __str__(self):
-        return f"ObjectDetector instance with model: {self.model_obj_det}"
+        return f"ObjectDetector instance with model: {self.model}"
 
     def show_image(self,img):
         cv.imshow("YOLOv8 Inference", img)
@@ -25,10 +27,13 @@ class ObjectDetector():
 
                 # Draw the bounding box rectangle and label on the image
                 cv.rectangle(img, (x, y), (x + w, y + h), self.color, 2)
-                text = "{}: {:4f}".format(self.labels[classids[i]], confidences[i])
+
+                text ="{}: {:4f}".format(self.labels_inverted[classids[i]], confidences[i])
+
                 cv.putText(
                     img, text, (x, y - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, self.color, 2
                 )
+
         return img
 
     def generate_boxes_confidences_classids(self, results, height, width, tconf):
@@ -99,8 +104,8 @@ class ObjectDetector():
         '''
 
         if infer:
-            self.model_obj_det.predict(img, classes=[0,46,47,73],verbose=False)
-            results= self.model_obj_det(img)
+            self.model.predict(img,verbose=False, classes=self.label_ids) #classes=[0,46,47,73]
+            results= self.model(img)
 
             # Generate the boxes, confidences, and classIDs
             boxes, confidences, classids = self.generate_boxes_confidences_classids(
@@ -122,19 +127,25 @@ class ObjectDetector():
                     "box": boxes[i],
                 }
                 obstacles.append(obstDetected)
-        # Draw labels and boxes on the image
+
         if drawBoxes:
             img = self.draw_labels_and_boxes(img, boxes, confidences, classids)
         return img, obstacles
 
 
 if __name__ == '__main__':
-    model_obj_det = YOLO('./object_tracking/yolo_models/yolov8n.pt')
-    objectDetector = ObjectDetector(model_obj_det)
+    label_list = ["apple", "banana", "background", "book","person"]
+    labels = {key: value for key, value in labelsYolo.items() if key in label_list}
+    label_ids=list(labels.values())
+
+    model = YOLO('yolo_models/yolov8n.pt')
+
+    objectDetector = ObjectDetector(model, labels, label_ids)
     cap = cv.VideoCapture(0)
 
     while True:
         ret, frame = cap.read()
+        frame = cv.resize(frame, (320, 240))
 
         if not ret:
             break
