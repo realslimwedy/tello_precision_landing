@@ -4,17 +4,25 @@ from code.config import tello_wifi
 from code.utils import connect_to_wifi
 import cv2 as cv
 
+
 class Drone():
-    def __init__(self,res=(640,480),mirror_down=True):
+    def __init__(self, res=(640, 480), mirror_down=True, speed=50):
         self.resolution = res
         self.mirror_down = mirror_down
         self.drone_is_on = False
         self.flight_phase = 'TAKEOFF'
         self.me = tello.Tello()
+        self.speed = speed
+
+    def __repr__(self):
+        return f'''
+Drone object with resolution {self.resolution}
+mirror_down: {self.mirror_down}
+drone_is_on: {self.drone_is_on}
+flight_phase: {self.flight_phase}'''
 
     def power_up(self):
         connect_to_wifi(tello_wifi)
-        #time.sleep(1)
         self.me.connect()
         self.drone_is_on = True
         print('#######################################################')
@@ -23,7 +31,6 @@ class Drone():
         print(f'Battery Level: {self.me.get_battery()} %')
         print(f'Flight Phase: {self.flight_phase}')
         print('#######################################################')
-        #time.sleep(1)
         self.me.streamon()
 
     def power_down(self):
@@ -52,10 +59,10 @@ class Drone():
 
     def get_drone_sensor_data(self):
         flight_time = self.me.get_flight_time()
-        battery_level = self.me.get_battery() # in %
-        temperature = self.me.get_temperature() # in °C
-        barometer = self.me.get_barometer() # in Pascal or in meter?
-        distance_tof = self.me.get_distance_tof() # in cm
+        battery_level = self.me.get_battery()  # in %
+        temperature = self.me.get_temperature()  # in °C
+        barometer = self.me.get_barometer()  # in Pascal or in meter?
+        distance_tof = self.me.get_distance_tof()  # in cm
         return battery_level, temperature, flight_time, barometer, distance_tof
 
     def get_frame(self):
@@ -67,7 +74,7 @@ class Drone():
         return img
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     drone = Drone()
     drone.power_up()
 
@@ -79,4 +86,3 @@ if __name__=="__main__":
         if cv.waitKey(1) & 0xFF == ord('q'):
             drone.power_down()
             break
-

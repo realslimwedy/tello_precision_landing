@@ -12,8 +12,8 @@ def display_status(text):
 
 if __name__ == '__main__':
 
-    #model_obj_det = YOLO('./object_tracking/yolo_models/yolov8n.pt')
-    #model_seg = YOLO('./object_tracking/yolo_models/yolov8n-seg.pt')
+    #model_obj_det = YOLO('./object_tracking/yoloV8_models/yolov8n.pt')
+    #model_seg = YOLO('./object_tracking/yoloV8_models/yolov8n-seg.pt')
     #objectDetector = ot.ObjectDetector(model_obj_det)
 
     width, height = 640, 480
@@ -28,7 +28,7 @@ if __name__ == '__main__':
     # auto_pilot
     ud_approach_center_area = width * height * 0.15 ** 2  # this needs to be calibrated, different for every resolution(?)
     PID = [0.4, 0, 0.4]
-    prv_error = (0, 0, 0, 0)
+    prev_error = (0, 0, 0, 0)
 
     # drone control
     tp.init_keyboard_control()
@@ -110,7 +110,7 @@ if __name__ == '__main__':
                 sys.exit()
 
         async def drone_control():
-            global img, rc_params, prv_error, auto_pilot
+            global img, rc_params, prev_error, auto_pilot
             while True:
                 rc_params = (0, 0, 0, 0)
 

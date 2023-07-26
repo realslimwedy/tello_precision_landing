@@ -10,7 +10,7 @@ if __name__ == '__main__':
     res = (width, height)
     ud_approach_center_area = 20000  # this needs to be calibrated, different for every resolution(?)
     PID = [0.4, 0, 0.4]
-    prv_error = (0, 0, 0, 0)
+    prev_error = (0, 0, 0, 0)
     tp.init_keyboard_control()
     me = tello.Tello()
     me.connect()

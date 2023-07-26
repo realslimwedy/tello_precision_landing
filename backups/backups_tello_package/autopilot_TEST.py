@@ -7,7 +7,7 @@ import sys
 import os
 
 # Get the parent folder path
-parent_folder_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+parent_folder_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../code'))
 
 # Add the parent folder to the system path
 sys.path.append(parent_folder_path)

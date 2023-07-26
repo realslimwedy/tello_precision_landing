@@ -2,8 +2,7 @@ import numpy as np
 
 
 class Autopilot:
-    def __init__(self, res=(640, 480), armed=False, PID=[0.4, 0, 0.4],
-                 speed=25, apriltag_factor=1):
+    def __init__(self, res=(640, 480), armed=False, PID=[0.4, 0, 0.4], speed=25, apriltag_factor=1):
         self.resolution = res
         self.autopilot_armed = armed
         self.rc_params = (0, 0, 0, 0)
@@ -12,14 +11,26 @@ class Autopilot:
         self.prev_error = (0, 0, 0, 0)
         self.autopilot_speed = speed
         self.apriltag_final_area_factor = apriltag_factor
-        self.apriltag_final_area=(self.resolution[0]*self.resolution[1]* 0.15 ** 2)*(1/self.apriltag_final_area_factor)
+        self.apriltag_final_area = (self.resolution[0] * self.resolution[1] * 0.15 ** 2) * (
+                    1 / self.apriltag_final_area_factor)
+
+    def __repr__(self):
+        return f'''
+res: {self.resolution}
+autopilot_armed: {self.autopilot_armed}
+rc_params: {self.rc_params}
+PID: {self.PID}
+error: {self.error}
+prev_error: {self.prev_error}
+autopilot_speed: {self.autopilot_speed}
+apriltag_final_area_factor: {self.apriltag_final_area_factor}
+'''
 
     def arm_autopilot(self):
         self.autopilot_armed = True
 
     def disarm_autopilot(self):
         self.autopilot_armed = False
-
 
     def set_autopilot_speed(self, autopilot_speed):
         self.autopilot_speed = autopilot_speed
@@ -52,7 +63,8 @@ class Autopilot:
 
             # forwards/backwards
             fb = prp * fb_error + dif * (fb_error - fb_error_prev)
-            fb = int(np.clip(fb, -self.autopilot_speed, self.autopilot_speed))  # when error is large, limit the rc command to 25
+            fb = int(np.clip(fb, -self.autopilot_speed,
+                             self.autopilot_speed))  # when error is large, limit the rc command to 25
 
             # left/right
             lr = prp * lr_error + dif * (lr_error - lr_error_prev)
@@ -64,8 +76,7 @@ class Autopilot:
 
         return (lr, fb, ud, yv)
 
-
-    def get_alignment_error(self,target_center, target_area):
+    def get_alignment_error(self, target_center, target_area):
         [cx, cy] = target_center
         area = target_area
         width, height = self.resolution

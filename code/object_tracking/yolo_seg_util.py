@@ -4,7 +4,7 @@ import numpy as np
 
 
 class SegmentationEngine():
-    def __init__(self, model,label_ids):
+    def __init__(self, model, label_ids):
         self.model = model
         self.label_ids = label_ids
 
@@ -47,36 +47,32 @@ class SegmentationEngine():
 
         return output_array
 
+    def inferImageDummy(self, img):
+        width, height = img.shape[1], img.shape[0]
+        output_array = np.full((height, width), 255, dtype=np.uint8)
+        return output_array
+
 
 if __name__ == "__main__":
     label_list = ["apple", "banana", "background", "book", "person"]
     labels = {key: value for key, value in labelsYolo.items() if key in label_list}
     label_ids = list(labels.values())
 
-    model = YOLO('yolo_models/yolov8n-seg.pt')
-    segEngine = SegmentationEngine(model, label_ids)
+    model = YOLO('yoloV8_models/yolov8n-seg.pt')
+    seg_engine = SegmentationEngine(model, label_ids)
 
     cap = cv.VideoCapture(0)
-
 
     while True:
         ret, frame = cap.read()
         if not ret:
             print("Error: Failed to retrieve a frame from the camera.")
             break
-        frame = cv.resize(frame, (320, 240)) #640, 480 vs. 320, 240
+        frame = cv.resize(frame, (320, 240))  # 640, 480 vs. 320, 240
 
-        segImg = segEngine.inferImage(frame)
+        segImg = seg_engine.inferImage(frame)
 
         cv.imshow('frame', segImg)
 
         if cv.waitKey(1) & 0xFF == ord('q'):
             break
-
-
-
-
-
-
-
-
