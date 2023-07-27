@@ -128,7 +128,7 @@ if __name__ == '__main__':
     while True:
 
         ret, frame = cap.read()
-        frame = cv.resize(frame, (640, 480))
+        frame = cv.resize(frame, (320, 240))
 
         if not ret:
             break
