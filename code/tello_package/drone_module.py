@@ -1,8 +1,9 @@
 from djitellopy import tello
-import time
+import cv2 as cv
+
 from code.config import tello_wifi
 from code.utils import connect_to_wifi
-import cv2 as cv
+from code import tello_package as tp
 
 
 class Drone():
@@ -10,7 +11,7 @@ class Drone():
         self.resolution = res
         self.mirror_down = mirror_down
         self.drone_is_on = False
-        self.flight_phase = 'TAKEOFF'
+        self.flight_phase = 'Pre-Flight'
         self.me = tello.Tello()
         self.speed = speed
 
@@ -75,14 +76,29 @@ flight_phase: {self.flight_phase}'''
 
 
 if __name__ == "__main__":
+
+    # init main variables
+    WIDTH, HEIGHT = 1280, 720  # (1280, 720), (640, 480), (320, 240)
+    RES = (WIDTH, HEIGHT)
+
+    # init pygame
+    py_game = tp.Pygame(res=(400, 400))
+    screen = py_game.screen
+    print(py_game)
+
+    # init drone
     drone = Drone()
     drone.power_up()
 
     while True:
+        rc_values = (0, 0, 0, 0)
+        rc_values = tp.keyboard_rc(drone.me, rc_values, py_game, drone.speed)
+        drone.me.send_rc_control(rc_values[0], rc_values[1], rc_values[2], rc_values[3])
+
         img = drone.get_frame()
         img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
         cv.imshow('Video Feed', img)
-        print(drone.get_drone_sensor_data()[0])
+
         if cv.waitKey(1) & 0xFF == ord('q'):
             drone.power_down()
             break

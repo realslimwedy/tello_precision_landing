@@ -8,26 +8,30 @@ from utils import rolling_average
 if __name__ == '__main__':
 
     # init main variables
-    width, height = 640, 480  # 640, 480 <> 320, 240
-    res = (width, height)
+    WIDTH, HEIGHT = 640, 480  # (1280, 720), (640, 480), (320, 240)
+    RES = (WIDTH, HEIGHT)
     exit_program = False
     img_obj_det = None
+    LABELS_YOLO = ot.labels_yolo
+
+    # init AprilTag Center Finder
+    apriltag_finder = ot.ApriltagFinder(resolution=RES)
 
     # Init YOLO
-    classes = ["apple", "banana", "background", "book", "person"]
+    CLASSES = ["apple", "banana", "background", "book", "person"]
 
-    model_obj_det = YOLO('object_tracking/yoloV8_models/yolov8n.pt')
+    MODEL_OBJ_DET = YOLO('object_tracking/yoloV8_models/yolov8n.pt')
     print("Object Detection Model loaded")
-    model_seg = YOLO('object_tracking/yoloV8_models/yolov8n-seg.pt')
+    MODEL_SEG = YOLO('object_tracking/yoloV8_models/yolov8n-seg.pt')
     print("Segmentation Model loaded")
 
     # Init Landing Zone Finder
-    lz_finder = ot.LzFinder(model_obj_det=model_obj_det, model_seg=model_seg, res=res, label_list=classes, use_seg=False,
+    lz_finder = ot.LzFinder(model_obj_det=MODEL_OBJ_DET, model_seg=MODEL_SEG, labels=LABELS_YOLO, res=RES, label_list=CLASSES, use_seg=False,
                             r_landing_factor=8, stride=75)
     print(lz_finder)
 
     # init pygame
-    py_game = tp.Pygame(res=res)
+    py_game = tp.Pygame(res=RES)
     screen = py_game.screen
     screen_variables_names_units = {
         'names': {
@@ -35,7 +39,7 @@ if __name__ == '__main__':
             'flight_phase': 'Flight Phase',
             'auto_pilot_armed': 'Auto-Pilot Armed',
             'speed': 'Speed',
-            #'temperature': 'Temperature',
+            'temperature': 'Temperature',
             'flight_time': 'Flight Time'
         },
         'units': {
@@ -43,14 +47,14 @@ if __name__ == '__main__':
         'flight_phase': '',
         'auto_pilot_armed': '',
         'speed': '',
-        #'temperature': '°C',
+        'temperature': '°C',
         'flight_time': 'sec'
         }
     }
     print(py_game)
 
     # init drone
-    drone = tp.Drone(res=res, mirror_down=True, speed=50)
+    drone = tp.Drone(res=RES, mirror_down=True, speed=50)
     drone.power_up()
     drone_is_one = drone.drone_is_on
     rc_values = (0, 0, 0, 0)
@@ -63,12 +67,12 @@ if __name__ == '__main__':
     print(drone)
 
     # init auto_pilot
-    auto_pilot = tp.Autopilot(res=res, speed=25, apriltag_factor=2)
-    auto_pilot_armed = auto_pilot.autopilot_armed
+    auto_pilot = tp.Autopilot(res=RES, speed=25, apriltag_factor=2)
+    auto_pilot_armed = auto_pilot.auto_pilot_armed
     prev_error = (0, 0, 0, 0)
     print(auto_pilot)
     landing_zone_xy_list = []
-    number_of_xy_values = 5
+    NUMBER_ROLLING_XY_VALUES = 5
 
 
     # async coroutine
@@ -86,6 +90,8 @@ if __name__ == '__main__':
                 target_xy = None
                 area = 0
                 rc_values = (0, 0, 0, 0)
+                landing_zone_xy = None
+                landing_zone_xy_avg = None
 
                 # auto_pilot computations
                 if drone.flight_phase == "Take-off":
@@ -93,14 +99,20 @@ if __name__ == '__main__':
                 elif drone.flight_phase == "Hover":
                     pass
                 elif drone.flight_phase == "Approach":
-                    img_april_tag, target_xy, area = ot.apriltag_center_area(img)
+                    if auto_pilot.auto_pilot_armed:
+                        img_april_tag, target_xy, area = apriltag_finder.apriltag_center_area(img)
+                    else:
+                        img_april_tag, _, _ = apriltag_finder.apriltag_center_area(img)
                 elif drone.flight_phase == "Landing":
-                    landing_zone_xy, img_obj_det, _ = lz_finder.get_final_lz(img)
+                    if auto_pilot.auto_pilot_armed:
+                        landing_zone_xy, img_obj_det, _ = lz_finder.get_final_lz(img)
+                    else:
+                        _, img_obj_det, _ = lz_finder.get_final_lz(img)
 
                     if landing_zone_xy is not None:
                         landing_zone_xy_avg, landing_zone_xy_list = rolling_average(landing_zone_xy_list,
-                                                                                       landing_zone_xy,
-                                                                                       number_of_xy_values)
+                                                                                    landing_zone_xy,
+                                                                                    NUMBER_ROLLING_XY_VALUES)
                     print("Landing Zone XY:", landing_zone_xy_avg)
 
                 if target_xy is not None:
@@ -110,7 +122,7 @@ if __name__ == '__main__':
                     prev_error = error
 
                 # watch out for keyboard input, return (0,0,0,0) if no key is pressed
-                rc_values = tp.keyboard_rc(drone.me, rc_values, py_game, drone.speed)
+                rc_values = tp.keyboard_rc(drone, rc_values, py_game, drone.speed)
 
                 # send rc commands to drone; order: 1) keyboard, 2) auto_pilot, 3) default (0,0,0,0)
                 drone.me.send_rc_control(rc_values[0], rc_values[1], rc_values[2], rc_values[3])
@@ -123,7 +135,7 @@ if __name__ == '__main__':
             while drone_is_one:
 
                 # register ESC has high priority
-                if tp.exit_app_key_pressed(drone.me, py_game):
+                if tp.exit_app_key_pressed(py_game):
                     drone_is_one = False
                     drone.power_down()
                     cv2.destroyAllWindows()
@@ -139,22 +151,22 @@ if __name__ == '__main__':
                         drone.speed = 50
 
                 # switch auto_pilot on/off
-                if tp.autopilot_key_pressed(drone.me, py_game):
-                    if not auto_pilot.autopilot_armed:
-                        auto_pilot.arm_autopilot()
-                    elif auto_pilot.autopilot_armed:
-                        auto_pilot.disarm_autopilot()
+                if tp.auto_pilot_key_pressed(py_game):
+                    if drone.flight_phase ==( "Approach" or "Landing"):
+                        auto_pilot.auto_pilot_armed = not auto_pilot.auto_pilot_armed
 
                 # set flight phase
-                if tp.takeoff_phase_key_pressed(drone.me, py_game):
+                if tp.takeoff_phase_key_pressed(py_game):
                     if drone.me.is_flying is not True:
                         drone.me.takeoff()
-                        drone.flight_phase = "Hover"
-                elif tp.hover_phase_key_pressed(drone.me, py_game):
+                        drone.flight_phase = "Take-off"
+                elif tp.hover_phase_key_pressed(py_game):
                     drone.flight_phase = "Hover"
-                elif tp.approach_phase_key_pressed(drone.me, py_game):
+                    if auto_pilot.auto_pilot_armed == True:
+                        auto_pilot.auto_pilot_armed = False
+                elif tp.approach_phase_key_pressed(py_game):
                     drone.flight_phase = "Approach"
-                elif tp.landing_phase_key_pressed(drone.me, py_game):
+                elif tp.landing_phase_key_pressed(py_game):
                     drone.flight_phase = "Landing"
 
                 await asyncio.sleep(0.05)
@@ -171,7 +183,7 @@ if __name__ == '__main__':
 
                 # video feed via pygame
                 if drone.flight_phase == "Take-off":
-                    py_game.display_video_feed(screen, img)
+                    pass # no video feed first, first cool down using fans
                 elif drone.flight_phase == "Hover":
                     py_game.display_video_feed(screen, img)
                 elif drone.flight_phase == "Approach":
@@ -185,9 +197,9 @@ if __name__ == '__main__':
                 else:
                     py_game.display_multiple_status(screen=screen, screen_variables_names_units=screen_variables_names_units,
                                                     v_pos=10, h_pos=10,
-                                                    battery_level=battery_level, flight_phase=drone.flight_phase,
-                                                    auto_pilot_armed=auto_pilot.autopilot_armed, speed=drone.speed, temperature=temperature,
-                                                    flight_time=flight_time)
+                                                    battery_level=battery_level,flight_time=flight_time,temperature=temperature, speed=drone.speed, flight_phase=drone.flight_phase,
+                                                    auto_pilot_armed=auto_pilot.auto_pilot_armed
+                                                    )
                 pygame.display.flip()
                 await asyncio.sleep(0.1) # (1. / 30) # ~0.03
 

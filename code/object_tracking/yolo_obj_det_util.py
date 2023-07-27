@@ -1,6 +1,7 @@
 from ultralytics import YOLO
 import cv2 as cv
-from .labels import labels_yolo
+import time
+
 
 
 class ObjectDetector():
@@ -34,8 +35,8 @@ class ObjectDetector():
 
         return img
 
-    def generate_boxes_confidences_classids(self, results, height, width, tconf):
-        objects = results[0].boxes
+    def generate_boxes_confidences_classids(self, objects, height, width, tconf):
+
         '''print('ENTIRE OBJECT')
         print(objects)
         print()
@@ -89,11 +90,11 @@ class ObjectDetector():
         '''
 
         if infer:
-            self.model.predict(img, verbose=False, classes=self.label_ids)  # classes=[0,46,47,73]
-            results = self.model(img)
+            results = self.model.predict(img, verbose=True, classes=self.label_ids)  # this takes 99% of the time
 
+            objects = results[0].boxes
             # Generate the boxes, confidences, and classIDs
-            boxes, confidences, classids = self.generate_boxes_confidences_classids(results, height, width, confidence)
+            boxes, confidences, classids = self.generate_boxes_confidences_classids(objects, height, width, confidence)
 
             # Apply Non-Maxima Suppression to suppress overlapping bounding boxes  # idxs = cv.dnn.NMSBoxes(boxes, confidences, confidence, threshold)
 
@@ -112,6 +113,9 @@ class ObjectDetector():
 
 
 if __name__ == '__main__':
+
+    from labels import labels_yolo
+
     label_list = ["apple", "banana", "background", "book", "person"]
     labels = {key: value for key, value in labels_yolo.items() if key in label_list}
     label_ids = list(labels.values())
@@ -122,16 +126,20 @@ if __name__ == '__main__':
     cap = cv.VideoCapture(0)
 
     while True:
+
         ret, frame = cap.read()
-        frame = cv.resize(frame, (320, 240))
+        frame = cv.resize(frame, (640, 480))
 
         if not ret:
             break
 
         height, width = frame.shape[:2]
 
+
         img, obstacles = object_detector.infer_image(height, width, frame)
+
         object_detector.show_image(img)
+
 
         if cv.waitKey(1) == ord('q'):
             break

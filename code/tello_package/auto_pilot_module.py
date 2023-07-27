@@ -4,7 +4,7 @@ import numpy as np
 class Autopilot:
     def __init__(self, res=(640, 480), armed=False, PID=[0.4, 0, 0.4], speed=25, apriltag_factor=1):
         self.resolution = res
-        self.autopilot_armed = armed
+        self.auto_pilot_armed = armed
         self.rc_params = (0, 0, 0, 0)
         self.PID = PID
         self.error = (0, 0, 0, 0)
@@ -17,7 +17,7 @@ class Autopilot:
     def __repr__(self):
         return f'''
 res: {self.resolution}
-autopilot_armed: {self.autopilot_armed}
+autopilot_armed: {self.auto_pilot_armed}
 rc_params: {self.rc_params}
 PID: {self.PID}
 error: {self.error}
@@ -27,10 +27,10 @@ apriltag_final_area_factor: {self.apriltag_final_area_factor}
 '''
 
     def arm_autopilot(self):
-        self.autopilot_armed = True
+        self.auto_pilot_armed = True
 
     def disarm_autopilot(self):
-        self.autopilot_armed = False
+        self.auto_pilot_armed = False
 
     def set_autopilot_speed(self, autopilot_speed):
         self.autopilot_speed = autopilot_speed

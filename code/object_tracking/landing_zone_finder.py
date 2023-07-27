@@ -5,14 +5,13 @@ from scipy.spatial import distance
 from scipy.ndimage import gaussian_filter
 from ultralytics import YOLO
 import time
+from object_tracking.yolo_obj_det_util import ObjectDetector
+from object_tracking.yolo_seg_util import SegmentationEngine
 
-from .labels import labels_yolo, risk_table
-from .yolo_obj_det_util import ObjectDetector
-from .yolo_seg_util import SegmentationEngine
 
 
 class LzFinder:
-    def __init__(self, model_obj_det, model_seg, label_list=['apple'], res=(640, 480), use_seg=True, r_landing_factor=6,
+    def __init__(self, model_obj_det, model_seg, labels, label_list=['apple'], res=(640, 480), use_seg=True, r_landing_factor=6,
                  stride=75):
         self.res = res
         self.width, self.height = res[0], res[1]
@@ -21,7 +20,8 @@ class LzFinder:
         r_landing_factor = r_landing_factor
         self.r_landing = int(self.width / r_landing_factor)
         self.stride = stride
-        self.labels = {key: value for key, value in labels_yolo.items() if key in label_list}
+        self.labels = labels
+        self.labels = {key: value for key, value in self.labels.items() if key in label_list}
         self.label_ids = list(self.labels.values())
         self.obstacles = []
 
@@ -41,7 +41,7 @@ Labels: {self.labels}"""
     def get_final_lz(self, img):
         landing_zone_xy = ()
 
-        _, objs = self.objectDetector.infer_image(height=self.height, width=self.width, img=img, drawBoxes=True)
+        _, objs = self.objectDetector.infer_image(height=self.height, width=self.width, img=img, drawBoxes=True) # this takes around 300ms / 99% of iteration time
 
         if self.use_seg:
             segImg = self.segEngine.inferImage(img)
@@ -70,10 +70,14 @@ Labels: {self.labels}"""
                                "id": 0}
                 lzs_ranked.append(lz)
 
-        landing_zone = lzs_ranked[-1]
-        landing_zone_xy = landing_zone["position"]
+        if lzs_ranked:
+            landing_zone = lzs_ranked[-1]
+            landing_zone_xy = landing_zone["position"]
+            img = self.draw_lzs_obs(lzs_ranked[-1:], self.obstacles, img)  # if no lz, nothing is drawn
+        else:
+            print("No landing zone found.")
+            landing_zone_xy = None
 
-        img = self.draw_lzs_obs(lzs_ranked[-1:], self.obstacles, img)  # if no lz, nothing is drawn
         return landing_zone_xy, img, risk_map
 
     def get_ranked_lz(self, obstacles, img, segImg):
@@ -228,6 +232,9 @@ Labels: {self.labels}"""
 
 if __name__ == "__main__":
 
+    from labels import labels_yolo, risk_table
+    from yolo_obj_det_util import ObjectDetector
+    from yolo_seg_util import SegmentationEngine
 
     label_list = ["apple", "banana", "background", "book", "person"]
     labels = {key: value for key, value in labels_yolo.items() if key in label_list}
@@ -247,24 +254,23 @@ if __name__ == "__main__":
 
 
     while True:
-        start_time = time.time()
 
         ret, frame = cap.read()
+
         if not ret:
             break
 
         frame = cv.resize(frame, lz_finder.res)
 
-        landing_zone_xy, img, risk_map = lz_finder.get_final_lz(frame)
+        landing_zone_xy, img, risk_map = lz_finder.get_final_lz(frame) # this step takes most time: ~~300 ms
 
         print(landing_zone_xy)
+
         cv.imshow("Landing Zone", img)
+
         #cv.imshow("Risk Map", risk_map)
 
-        end_time = time.time()
-        iteration_time = (end_time - start_time) * 1000
 
-        print("Iteration Time (ms):", iteration_time)
 
         if cv.waitKey(1) == ord('q'):
             break

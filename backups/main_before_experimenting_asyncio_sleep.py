@@ -14,9 +14,9 @@ if __name__ == '__main__':
     # Init YOLO
     classes = ["apple", "banana", "background", "book", "person"]
 
-    model_obj_det = YOLO('object_tracking/yoloV8_models/yolov8n.pt')
+    model_obj_det = YOLO('../code/object_tracking/yoloV8_models/yolov8n.pt')
     print("Object Detection Model loaded")
-    model_seg = YOLO('object_tracking/yoloV8_models/yolov8n-seg.pt')
+    model_seg = YOLO('../code/object_tracking/yoloV8_models/yolov8n-seg.pt')
     print("Segmentation Model loaded")
 
     # Init Landing Zone Finder
@@ -57,7 +57,7 @@ if __name__ == '__main__':
 
     # init auto_pilot
     auto_pilot = tp.Autopilot(res=res, speed=25, apriltag_factor=1)
-    auto_pilot_armed = auto_pilot.autopilot_armed
+    auto_pilot_armed = auto_pilot.auto_pilot_armed
     prev_error = (0, 0, 0, 0)
     print(auto_pilot)
 
@@ -92,7 +92,7 @@ if __name__ == '__main__':
                 py_game.display_multiple_status(screen=screen, screen_variables_names_units=screen_variables_names_units,
                                                 v_pos=10, h_pos=10,
                                                 battery_level=battery_level, flight_phase=drone.flight_phase,
-                                                auto_pilot_armed=auto_pilot.autopilot_armed, speed=drone.speed, temperature=temperature,
+                                                auto_pilot_armed=auto_pilot.auto_pilot_armed, speed=drone.speed, temperature=temperature,
                                                 flight_time=flight_time)
 
                 pygame.display.flip()
@@ -115,10 +115,10 @@ if __name__ == '__main__':
                 target_xy = None
                 area = 0
 
-                if tp.autopilot_key_pressed(drone.me, py_game):
-                    if not auto_pilot.autopilot_armed:
+                if tp.auto_pilot_key_pressed(drone.me, py_game):
+                    if not auto_pilot.auto_pilot_armed:
                         auto_pilot.arm_autopilot()
-                    elif auto_pilot.autopilot_armed:
+                    elif auto_pilot.auto_pilot_armed:
                         auto_pilot.disarm_autopilot()
 
                 if tp.takeoff_phase_key_pressed(drone.me, py_game):
