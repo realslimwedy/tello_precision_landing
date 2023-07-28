@@ -2,14 +2,14 @@ import numpy as np
 
 
 class Autopilot:
-    def __init__(self, res=(640, 480), armed=False, PID=[0.4, 0, 0.4], speed=25, apriltag_factor=1):
+    def __init__(self, res=(640, 480), armed=False, PID=[0.4, 0, 0.4], auto_pilot_speed=25, apriltag_factor=1):
         self.resolution = res
         self.auto_pilot_armed = armed
         self.rc_params = (0, 0, 0, 0)
         self.PID = PID
         self.error = (0, 0, 0, 0)
         self.prev_error = (0, 0, 0, 0)
-        self.autopilot_speed = speed
+        self.autopilot_speed = auto_pilot_speed
         self.apriltag_final_area_factor = apriltag_factor
         self.apriltag_final_area = (self.resolution[0] * self.resolution[1] * 0.15 ** 2) * (
                     1 / self.apriltag_final_area_factor)

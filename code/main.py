@@ -1,195 +1,348 @@
-import pygame, cv2, sys, time
+import queue
+#from collections import deque
+import threading
+import pygame, sys, time
+import cv2 as cv
 from ultralytics import YOLO
-
 import tello_package as tp
 import object_tracking as ot
-from utils import rolling_average
+import utils as ut
+from pygame import USEREVENT
+import numpy as np
+import djitellopy as tello
+
+#######################################################################################################################
+
+# TODOS
+# - [ ] Try another FPS
+# - [ ] Add logging
+# - [ ] Add image capturing capability
+# - [ ] go back to using queue and nowait
+# - [ ] Try to use frame as global variable not as queue
+
+#######################################################################################################################
+
+WIDTH, HEIGHT = 640, 480  # (1280, 720), (640, 480), (320, 240)
+R_LANDING_FACTOR = 8
+STRIDE = 75
+FPS = 25
+NUMBER_ROLLING_XY_VALUES = 5
+SPEED = 50
+AUTO_PILOT_SPEED = 40
+APRILTAG_FACTOR = 2
+
+RES = (WIDTH, HEIGHT)
+exit_program = False
+
+dummy_img_for_init = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
+
+#CLASSES_BLACKLIST = ['train', 'stop sign', 'bottle', 'carrot', "dining table"]
+#CLASSES_WHITE_LIST = [cls for cls in ot.labels_yolo.keys() if cls not in CLASSES_BLACKLIST]
+CLASSES_WHITE_LIST = ['person', 'background', 'banana', 'apple', 'book','mouse']
+
+MODEL_OBJ_DET_PATH = 'object_tracking/yoloV8_models/yolov8n.pt'
+MODEL_SEG_PATH = 'object_tracking/yoloV8_models/yolov8n-seg.pt'
+
+#frame_global = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
+
+flight_phase = 'Pre-Flight'
+
+frame_q = queue.Queue()
+img_obj_det_q = queue.Queue()
+landing_zone_xy_q = queue.Queue()
+
+'''frame_q = deque(maxlen=1)
+landing_zone_xy_q = deque(maxlen=1)
+img_obj_det_q = deque(maxlen=1)'''
+
+controller_initialized = threading.Event()
+
+#######################################################################################################################
+
+
+def yolo_thread():
+    print('[YOLO-THREAD]: Thread started')
+    global img_obj_det, exit_program, img_obj_det_q, landing_zone_xy_q, frame_q #, frame_global
+
+    # load models
+    model_obj_det = YOLO(MODEL_OBJ_DET_PATH)
+    print("[YOLO-THREAD]: Object Detection Model loaded")
+    model_seg = YOLO(MODEL_SEG_PATH)
+    print("[YOLO-THREAD]: Segmentation Model loaded")
+    lz_finder = ot.LzFinder(model_obj_det=model_obj_det, model_seg=model_seg, labels=ot.labels_yolo, res=RES,
+                            label_list=CLASSES_WHITE_LIST, use_seg=False, r_landing_factor=R_LANDING_FACTOR,
+                            stride=STRIDE)
+    landing_zone_xy, img_obj_det, _ = lz_finder.get_final_lz(dummy_img_for_init)
+    print('[YOLO-THREAD]: yolo_thread fully initialized')
+
+    frame_global = None
+
+    controller_initialized.wait()
+
+    while True:
+        yolo_start_time = time.time()
+
+        '''try:
+            frame_global = frame_q[-1]
+        except IndexError:
+            print('[YOLO-THREAD]: frame_queue is empty')
+            pass'''
+
+        try:
+            frame_global = frame_q.get()
+            #frame_global = frame_queue.get()
+        except queue.Empty:
+            print('[YOLO-THREAD]: frame_queue is empty')
+            pass
+
+        if frame_global is not None:
+            print('[YOLO-THREAD]: starting inference')
+            yolo_inference_start_time = time.time()
+            landing_zone_xy, img_obj_det, _ = lz_finder.get_final_lz(frame_global)
+            yolo_inference_end_time = time.time()
+            print('[YOLO-THREAD]: finished inference: ' + str((yolo_inference_end_time - yolo_inference_start_time) * 1000))
+        else:
+            print('[YOLO-THREAD]: frame_global is None')
+            pass
+
+        if landing_zone_xy is not None:
+            print(f'[YOLO-THREAD]: Landing Zone: {landing_zone_xy}')
+            #landing_zone_xy_q.append(landing_zone_xy)
+            with landing_zone_xy_q.mutex:
+                landing_zone_xy_q.queue.clear()
+            landing_zone_xy_q.put(landing_zone_xy)
+            print('[YOLO-THREAD]: landing_zone_xy put in queue')
+        else:
+            print('[YOLO-THREAD]: landing_zone_xy is None')
+
+        if img_obj_det is not None:
+            print(f'[YOLO-THREAD]: img_obj_det: {img_obj_det.shape}')
+            #img_obj_det_q.append(img_obj_det)
+            with img_obj_det_q.mutex:
+                img_obj_det_q.queue.clear()
+            img_obj_det_q.put(img_obj_det)
+            print('[YOLO-THREAD]: img_obj_det put in queue')
+        else:
+            print('[YOLO-THREAD]: img_obj_det is None')
+
+        frame_global = None
+
+        yolo_end_time = time.time()
+        print('[YOLO-THREAD]: Loop Time: ' + str((yolo_end_time - yolo_start_time) * 1000))
+
+
+#######################################################################################################################
+
+
+class DroneController:
+
+    def __init__(self):
+
+        print('[CONTROLLER-THREAD]: init started')
+        # initialize drone, py_game, auto_pilot
+        self.drone = tp.Drone(res=RES, mirror_down=True, speed=SPEED)
+        self.drone.power_up()
+
+        self.apriltag_finder = ot.ApriltagFinder(resolution=RES)
+
+        self.py_game = tp.Pygame(res=RES)
+        self.screen = self.py_game.screen
+
+        self.auto_pilot = tp.Autopilot(res=RES, auto_pilot_speed=AUTO_PILOT_SPEED, apriltag_factor=APRILTAG_FACTOR)
+
+        # initialize variables
+
+        self.py_game.set_timer(USEREVENT + 1, 50)
+        self.py_game.set_timer(USEREVENT + 2, 500)
+
+        print('[CONTROLLER-THREAD]: init finished')
+        controller_initialized.set()
+
+
+    def run(self):
+        print('[CONTROLLER-THREAD]: run started')
+
+        global img_obj_det, exit_program, prev_error, img_obj_det_q, landing_zone_xy_q, frame_q #, frame_global
+
+        #frame_global = None
+        prev_error = (0,0,0,0)
+        frame = self.drone.get_frame()
+        img_april_tag = None
+        img_obj_det_before = dummy_img_for_init
+
+        while not exit_program:
+            controller_loop_start_time = time.time()
+            print('[CONTROLLER-THREAD]: run LOOP started')
+            print(f'[CONTROLLER-THREAD]: {threading.active_count()}')
+            flight_phase = self.drone.flight_phase
+
+            rc_values = (0, 0, 0, 0)
+            area = 0
+            target_xy = (0,0)
+            landing_zone_xy = (0,0)
+            img_obj_det_new = None
+
+            frame = self.drone.get_frame()
+            print('[CONTROLLER-THREAD]: frame received from drone')
+
+            for event in pygame.event.get():
+                if event.type == USEREVENT + 2:
+                    #frame_q.append(frame)
+                    with frame_q.mutex:
+                        frame_q.queue.clear()
+                    frame_q.put(frame)
+                    print('[CONTROLLER-THREAD]: frame put in queue')
+
+                '''if event.type == USEREVENT + 1:
+                    rc_values = tp.keyboard_rc(self.drone, rc_values, self.py_game, self.drone.speed)
+                    self.drone.me.send_rc_control(rc_values[0], rc_values[1], rc_values[2], rc_values[3])'''
+            print('[CONTROLLER-THREAD]: events pygame events handled')
+
+            # register ESC has high priority
+            if tp.exit_app_key_pressed(self.py_game):
+                self.drone.power_down()
+                cv.destroyAllWindows()
+                pygame.quit()
+                exit_program = True
+                break
+
+            # switch speed
+            if tp.switch_speed_key_pressed(self.py_game):
+                if self.drone.speed == 50:
+                    self.drone.speed = 100
+                elif self.drone.speed == 100:
+                    self.drone.speed = 50
+
+            # switch auto_pilot on/off
+            if tp.auto_pilot_key_pressed(self.py_game):
+                if self.drone.flight_phase == ("Approach" or "Landing"):
+                    self.auto_pilot.auto_pilot_armed = not self.auto_pilot.auto_pilot_armed
+
+            # set flight phase
+            if tp.takeoff_phase_key_pressed(self.py_game):
+                if self.drone.me.is_flying is not True:
+                    self.drone.me.takeoff()
+                    self.drone.flight_phase = "Take-off"
+            elif tp.hover_phase_key_pressed(self.py_game):
+                self.drone.flight_phase = "Hover"
+                if self.auto_pilot.auto_pilot_armed:
+                    self.auto_pilot.auto_pilot_armed = False
+            elif tp.approach_phase_key_pressed(self.py_game):
+                self.drone.flight_phase = "Approach"
+                print('[CONTROLLER-THREAD]: approach phase +++++++++++++++++')
+            elif tp.landing_phase_key_pressed(self.py_game):
+                self.drone.flight_phase = "Landing"
+
+            # auto_pilot computations
+            if self.drone.flight_phase == "Take-off":
+                pass
+
+            elif self.drone.flight_phase == "Hover":
+                pass
+
+            elif self.drone.flight_phase == "Approach":
+                if self.auto_pilot.auto_pilot_armed:
+                    img_april_tag, target_xy, area = self.apriltag_finder.apriltag_center_area(frame)
+                else:
+                    img_april_tag, _, _ = self.apriltag_finder.apriltag_center_area(frame)
+
+
+            elif self.drone.flight_phase == "Landing":
+                try:
+                    img_obj_det_new = img_obj_det_q.get_nowait()
+                except queue.Empty:
+                    print('[CONTROLLER-THREAD]: queue is empty')
+
+                #if self.auto_pilot.auto_pilot_armed:
+                try:
+                    landing_zone_xy = landing_zone_xy_q.get_nowait()
+                except queue.Empty:
+                    print('[CONTROLLER-THREAD]: landing_zone_xy_queue is empty')
+
+            '''elif self.drone.flight_phase == "Landing":
+                try:
+                    img_obj_det = yolo_img_q.get_nowait()
+                    #img_obj_det = yolo_img_queue.get_nowait()
+                except queue.Empty:
+                    print('[CONTROLLER-THREAD]: queue is empty')
+                    continue
+
+                if self.auto_pilot.auto_pilot_armed:
+                    try:
+                        landing_zone_xy = xy_landing_zone_q.get_nowait()
+                        #landing_zone_xy = xy_landing_zone_queue.get_nowait()
+                    except queue.Empty:
+                        print('[CONTROLLER-THREAD]: queue is empty')
+                        continue
+                else:
+                    pass'''
+
+            print('[CONTROLLER-THREAD]: landing_zone_xy: ' + str(landing_zone_xy))
+
+            if target_xy is not None:
+                # send rc commands based on target_xy
+                error = self.auto_pilot.get_alignment_error(target_xy, area)
+                rc_values = self.auto_pilot.track_target(rc_values, target_xy, error, prev_error, area)
+                prev_error = error
+
+            rc_values = tp.keyboard_rc(self.drone, rc_values, self.py_game, self.drone.speed)
+
+            # send rc commands to drone; order: 1) keyboard, 2) auto_pilot, 3) default (0,0,0,0)
+            self.drone.me.send_rc_control(rc_values[0], rc_values[1], rc_values[2], rc_values[3])
+
+
+            # get drone sensor data for display in pygame
+            battery_level, temperature, flight_time, _, _ = self.drone.get_drone_sensor_data()
+
+            # video feed via pygame
+            if self.drone.flight_phase == "Take-off":
+                pass  # no video feed first, first cool down using fans
+            elif self.drone.flight_phase == "Hover":
+                # put small green dot in the middle of the screen
+                frame = ut.add_central_dot(frame)
+                self.py_game.display_video_feed(self.screen, frame)
+            elif self.drone.flight_phase == "Approach":
+                img_april_tag = ut.add_central_dot(img_april_tag)
+                self.py_game.display_video_feed(self.screen, img_april_tag)
+
+            if self.drone.flight_phase == "Landing":
+                frame = ut.add_central_dot(frame)
+                self.py_game.display_video_feed(self.screen, frame)
+
+                if img_obj_det_new is not None:
+                    img_obj_det_new = cv.cvtColor(img_obj_det_new, cv.COLOR_BGR2RGB)
+                    cv.imshow('Object Detection', img_obj_det_new)
+
+            if battery_level <= 15:
+                self.py_game.display_status(screen=self.screen, text="Battery level low: " + str(battery_level) + "%",
+                                            show_warning=True)
+            else:
+                self.py_game.display_multiple_status(screen=self.screen, v_pos=10, h_pos=10,
+                                                     battery_level=battery_level, flight_time=flight_time,
+                                                     temperature=temperature, speed=self.drone.speed,
+                                                     flight_phase=self.drone.flight_phase,
+                                                     auto_pilot_armed=self.auto_pilot.auto_pilot_armed)
+            pygame.display.flip()
+
+            controller_loop_end_time = time.time()
+            print("[CONTROLLER-THREAD]: Loop Time: " + str((controller_loop_end_time - controller_loop_start_time) * 1000))
+
+            time.sleep(1 / FPS)
+
+        if exit_program:
+            sys.exit()
+
+
+def main():
+
+    thread_yolo = threading.Thread(target=yolo_thread, args=())
+    thread_yolo.daemon = True
+    thread_yolo.start()
+
+    yolo_drone = DroneController()
+    yolo_drone.run()
+
+
 
 if __name__ == '__main__':
-
-    # init main variables
-    WIDTH, HEIGHT = 320, 240  # (1280, 720), (640, 480), (320, 240)
-    RES = (WIDTH, HEIGHT)
-    exit_program = False
-    img_obj_det = None
-    LABELS_YOLO = ot.labels_yolo
-
-    # init AprilTag Center Finder
-    apriltag_finder = ot.ApriltagFinder(resolution=RES)
-
-    # Init YOLO
-    CLASSES = ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
-               'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
-               'elephant', 'bear', 'sports ball', 'bottle', 'wine glass', 'fork', 'knife', 'spoon', 'bowl', 'banana',
-               'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair',
-               'couch', 'potted plant', 'bed', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone', 'microwave',
-               'book', 'clock', 'vase', 'scissors', 'toothbrush', 'background']
-
-    MODEL_OBJ_DET = YOLO('object_tracking/yoloV8_models/yolov8n.pt')
-    print("Object Detection Model loaded")
-    MODEL_SEG = YOLO('object_tracking/yoloV8_models/yolov8n-seg.pt')
-    print("Segmentation Model loaded")
-
-    # Init Landing Zone Finder
-    lz_finder = ot.LzFinder(model_obj_det=MODEL_OBJ_DET, model_seg=MODEL_SEG, labels=LABELS_YOLO, res=RES,
-                            label_list=CLASSES, use_seg=False, r_landing_factor=8, stride=75)
-    print(lz_finder)
-
-    # init pygame
-    py_game = tp.Pygame(res=RES)
-    screen = py_game.screen
-    screen_variables_names_units = {'names': {'battery_level': 'Battery Level', 'flight_phase': 'Flight Phase',
-        'auto_pilot_armed': 'Auto-Pilot Armed', 'speed': 'Speed', 'temperature': 'Temperature',
-        'flight_time': 'Flight Time'},
-        'units': {'battery_level': '%', 'flight_phase': '', 'auto_pilot_armed': '', 'speed': '', 'temperature': '°C',
-            'flight_time': 'sec'}}
-    print(py_game)
-
-    # init drone
-    drone = tp.Drone(res=RES, mirror_down=True, speed=50)
-    drone.power_up()
-    drone_is_one = drone.drone_is_on
-    rc_values = (0, 0, 0, 0)
-    img = drone.get_frame()
-    img_april_tag = img
-    img_obj_det = img
-    landing_zone_xy, img_obj_det, _ = lz_finder.get_final_lz(img)  # first time always takes longest, so do it here
-    battery_level = None
-    temperature = None
-    flight_time = None
-    print(drone)
-
-    # init auto_pilot
-    auto_pilot = tp.Autopilot(res=RES, speed=40, apriltag_factor=2)
-    auto_pilot_armed = auto_pilot.auto_pilot_armed
-    prev_error = (0, 0, 0, 0)
-    print(auto_pilot)
-    landing_zone_xy_list = []
-    NUMBER_ROLLING_XY_VALUES = 5
-
-    while drone_is_one:
-
-        ##############################################
-        start1 = time.time()
-        img = drone.get_frame()
-        end1 = time.time()
-        print("Frame:", end1 - start1)
-
-        ##############################################
-
-        start2 = time.time()
-        target_xy = None
-        area = 0
-        rc_values = (0, 0, 0, 0)
-        landing_zone_xy = None
-        landing_zone_xy_avg = None
-
-        # auto_pilot computations
-        if drone.flight_phase == "Take-off":
-            pass
-
-        elif drone.flight_phase == "Hover":
-            pass
-
-        elif drone.flight_phase == "Approach":
-            if auto_pilot.auto_pilot_armed:
-                img_april_tag, target_xy, area = apriltag_finder.apriltag_center_area(img)
-            else:
-                img_april_tag, _, _ = apriltag_finder.apriltag_center_area(img)
-
-        elif drone.flight_phase == "Landing":
-            if auto_pilot.auto_pilot_armed:
-                landing_zone_xy, img_obj_det, _ = lz_finder.get_final_lz(img)
-            else:
-                _, img_obj_det, _ = lz_finder.get_final_lz(img)
-
-            if landing_zone_xy is not None:
-                landing_zone_xy_avg, landing_zone_xy_list = rolling_average(landing_zone_xy_list, landing_zone_xy,
-                                                                            NUMBER_ROLLING_XY_VALUES)  # print("Landing Zone XY:", landing_zone_xy_avg)
-
-        if target_xy is not None:
-            # send rc commands based on target_xy
-            error = auto_pilot.get_alignment_error(target_xy, area)
-            rc_values = auto_pilot.track_target(rc_values, target_xy, error, prev_error, area)
-            prev_error = error
-
-        # watch out for keyboard input, return (0,0,0,0) if no key is pressed
-        rc_values = tp.keyboard_rc(drone, rc_values, py_game, drone.speed)
-
-        # send rc commands to drone; order: 1) keyboard, 2) auto_pilot, 3) default (0,0,0,0)
-        drone.me.send_rc_control(rc_values[0], rc_values[1], rc_values[2], rc_values[3])
-
-        end2 = time.time()
-        print("Control:", end2 - start2)
-
-        ##############################################
-
-        start3 = time.time()
-        # register ESC has high priority
-        if tp.exit_app_key_pressed(py_game):
-            drone_is_one = False
-            drone.power_down()
-            cv2.destroyAllWindows()
-            pygame.quit()
-            exit_program = True
-            break
-
-        # switch speed
-        if tp.switch_speed_key_pressed(py_game):
-            if drone.speed == 50:
-                drone.speed = 100
-            elif drone.speed == 100:
-                drone.speed = 50
-
-        # switch auto_pilot on/off
-        if tp.auto_pilot_key_pressed(py_game):
-            if drone.flight_phase == ("Approach" or "Landing"):
-                auto_pilot.auto_pilot_armed = not auto_pilot.auto_pilot_armed
-
-        # set flight phase
-        if tp.takeoff_phase_key_pressed(py_game):
-            if drone.me.is_flying is not True:
-                drone.me.takeoff()
-                drone.flight_phase = "Take-off"
-        elif tp.hover_phase_key_pressed(py_game):
-            drone.flight_phase = "Hover"
-            if auto_pilot.auto_pilot_armed == True:
-                auto_pilot.auto_pilot_armed = False
-        elif tp.approach_phase_key_pressed(py_game):
-            drone.flight_phase = "Approach"
-        elif tp.landing_phase_key_pressed(py_game):
-            drone.flight_phase = "Landing"
-
-        end3 = time.time()
-        print("Keyboard:", end3 - start3)
-        ##############################################
-
-        start4 = time.time()
-
-        # get drone sensor data for display in pygame
-        battery_level, temperature, flight_time, _, _ = drone.get_drone_sensor_data()
-        # video feed via pygame
-        if drone.flight_phase == "Take-off":
-            pass  # no video feed first, first cool down using fans
-        elif drone.flight_phase == "Hover":
-            py_game.display_video_feed(screen, img)
-        elif drone.flight_phase == "Approach":
-            py_game.display_video_feed(screen, img_april_tag)
-        elif drone.flight_phase == "Landing":
-            py_game.display_video_feed(screen, img_obj_det)
-
-        if battery_level <= 15:
-            py_game.display_status(screen=screen, text="Battery level low: " + str(battery_level) + "%",
-                                   show_warning=True)
-        else:
-            py_game.display_multiple_status(screen=screen, screen_variables_names_units=screen_variables_names_units,
-                                            v_pos=10, h_pos=10, battery_level=battery_level, flight_time=flight_time,
-                                            temperature=temperature, speed=drone.speed, flight_phase=drone.flight_phase,
-                                            auto_pilot_armed=auto_pilot.auto_pilot_armed)
-        pygame.display.flip()
-
-        end4 = time.time()
-        print("Pygame:", end4 - start4)  ##############################################
-
-    if exit_program == True:
-        sys.exit()
+    main()

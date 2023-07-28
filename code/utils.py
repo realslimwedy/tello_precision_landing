@@ -19,11 +19,13 @@ def find_camera_index():
             print(f"Found camera at index {i}")
             cap.release()
 
+
 def calculate_average(values):
     # Calculate the average of the two values in the input list
     avg_num1 = sum(pair[0] for pair in values) / len(values)
     avg_num2 = sum(pair[1] for pair in values) / len(values)
     return avg_num1, avg_num2
+
 
 def rolling_average(list_of_tuples, new_tuple, number_of_values=5):
     number_of_values = number_of_values
@@ -39,5 +41,15 @@ def rolling_average(list_of_tuples, new_tuple, number_of_values=5):
     return avg_values, list_of_tuples
 
 
-if __name__=="__main__":
+# define function to take an image and return the image with a green dot in the middle
+def add_central_dot(image, radius=5, color=(0, 255, 0), thickness=-1):
+    radius = radius
+    color = color
+    thickness = thickness
+    image = cv.circle(image, (int(image.shape[1] / 2), int(image.shape[0] / 2)), radius=radius, color=color,
+                      thickness=thickness)
+    return image
+
+
+if __name__ == "__main__":
     find_camera_index()

@@ -122,7 +122,7 @@ if __name__ == '__main__':
                     prev_error = error
 
                 # watch out for keyboard input, return (0,0,0,0) if no key is pressed
-                rc_values = tp.keyboard_rc(drone, rc_values, py_game, drone.speed)
+                rc_values = tp.keyboard_rc(drone, rc_values, py_game, drone.SPEED)
 
                 # send rc commands to drone; order: 1) keyboard, 2) auto_pilot, 3) default (0,0,0,0)
                 drone.me.send_rc_control(rc_values[0], rc_values[1], rc_values[2], rc_values[3])
@@ -145,10 +145,10 @@ if __name__ == '__main__':
 
                 # switch speed
                 if tp.switch_speed_key_pressed(py_game):
-                    if drone.speed == 50:
-                        drone.speed = 100
-                    elif drone.speed == 100:
-                        drone.speed = 50
+                    if drone.SPEED == 50:
+                        drone.SPEED = 100
+                    elif drone.SPEED == 100:
+                        drone.SPEED = 50
 
                 # switch auto_pilot on/off
                 if tp.auto_pilot_key_pressed(py_game):
@@ -197,7 +197,7 @@ if __name__ == '__main__':
                 else:
                     py_game.display_multiple_status(screen=screen, screen_variables_names_units=screen_variables_names_units,
                                                     v_pos=10, h_pos=10,
-                                                    battery_level=battery_level,flight_time=flight_time,temperature=temperature, speed=drone.speed, flight_phase=drone.flight_phase,
+                                                    battery_level=battery_level, flight_time=flight_time, temperature=temperature, speed=drone.SPEED, flight_phase=drone.flight_phase,
                                                     auto_pilot_armed=auto_pilot.auto_pilot_armed
                                                     )
                 pygame.display.flip()

@@ -41,7 +41,7 @@ Labels: {self.labels}"""
     def get_final_lz(self, img):
         landing_zone_xy = ()
 
-        _, objs = self.objectDetector.infer_image(height=self.height, width=self.width, img=img, drawBoxes=True) # this takes around 300ms / 99% of iteration time
+        _, objs = self.objectDetector.infer_image(height=self.height, width=self.width, img=img, drawBoxes=True) # this takes around 150ms / 99% of iteration time
 
         if self.use_seg:
             segImg = self.segEngine.inferImage(img)

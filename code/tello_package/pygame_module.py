@@ -2,12 +2,22 @@ import pygame
 import cv2 as cv
 
 
+screen_variables_names_units = {
+    'names': {'battery_level': 'Battery Level', 'flight_phase': 'Flight Phase',
+              'auto_pilot_armed': 'Auto-Pilot Armed',
+              'speed': 'Speed', 'temperature': 'Temperature', 'flight_time': 'Flight Time'},
+    'units': {'battery_level': '%', 'flight_phase': '', 'auto_pilot_armed': '', 'speed': '',
+              'temperature': '°C',
+              'flight_time': 'sec'}}
+
+
 class Pygame():
     def __init__(self, res=(400, 400)):
         pygame.init()
         win = pygame.display.set_mode(res)
         self.screen = pygame.display.set_mode(res)
         pygame.display.set_caption("Drone Control")
+        self.screen_variables_names_units = screen_variables_names_units
 
     def __repr__(self):
         return f'Pygame window \"Drone Control\" openend'
@@ -45,9 +55,11 @@ class Pygame():
         text_rect.center = screen_rect.center
         screen.blit(status_text, text_rect)
 
-    def display_multiple_status(self, screen, screen_variables_names_units, v_pos=10, h_pos=10, **kwargs):
+    def set_timer(self, event_id, time_ms):
+        pygame.time.set_timer(event_id, time_ms)
+
+    def display_multiple_status(self, screen, v_pos=10, h_pos=10, **kwargs):
         self.screen = screen
-        self.screen_variables_names_units = screen_variables_names_units
         self.v_pos = v_pos
         self.h_pos = h_pos
         self.kwargs = kwargs
@@ -60,8 +72,8 @@ class Pygame():
             bg_color = (0, 0, 0)
             show_warning = None
 
-            name = screen_variables_names_units['names'].get(variable)
-            unit = screen_variables_names_units['units'].get(variable)
+            name = self.screen_variables_names_units['names'].get(variable)
+            unit = self.screen_variables_names_units['units'].get(variable)
 
             if variable == "battery_level":
                 show_warning = value <= 20
