@@ -12,8 +12,8 @@ def display_status(text):
 
 if __name__ == '__main__':
 
-    #model_obj_det = YOLO('./object_tracking/yoloV8_models/yolov8n.pt')
-    #model_seg = YOLO('./object_tracking/yoloV8_models/yolov8n-seg.pt')
+    #model_obj_det = YOLO('./vision_package/yoloV8_models/yolov8n.pt')
+    #model_seg = YOLO('./vision_package/yoloV8_models/yolov8n-seg.pt')
     #objectDetector = ot.ObjectDetector(model_obj_det)
 
     width, height = 640, 480

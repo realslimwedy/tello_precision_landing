@@ -1,11 +1,11 @@
 import queue
-#from collections import deque
+# from collections import deque
 import threading
 import pygame, sys, time
 import cv2 as cv
 from ultralytics import YOLO
 import tello_package as tp
-import object_tracking as ot
+import vision_package as ot
 import utils as ut
 from pygame import USEREVENT
 import numpy as np
@@ -15,10 +15,13 @@ import djitellopy as tello
 
 # TODOS
 # - [ ] Try another FPS
-# - [ ] Add logging
-# - [ ] Add image capturing capability
-# - [ ] go back to using queue and nowait
 # - [ ] Try to use frame as global variable not as queue
+# - [ ] Try limiting objects detected to only one
+
+# - [ ] Add option to show object detection in GUI
+# - [ ] Add option to show segmentation mask in GUI
+# - [ ] Add image capturing capability
+# - [ ] Add logging
 
 #######################################################################################################################
 
@@ -36,14 +39,14 @@ exit_program = False
 
 dummy_img_for_init = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
 
-#CLASSES_BLACKLIST = ['train', 'stop sign', 'bottle', 'carrot', "dining table"]
-#CLASSES_WHITE_LIST = [cls for cls in ot.labels_yolo.keys() if cls not in CLASSES_BLACKLIST]
-CLASSES_WHITE_LIST = ['person', 'background', 'banana', 'apple', 'book','mouse']
+labels_str_list_blacklist = ['train', 'stop sign', 'bottle', 'carrot', "dining table"]
+labels_str_list_whitelist = [cls for cls in ot.labels_yolo.keys() if cls not in labels_str_list_blacklist]
+labels_dic_filtered = {key: value for key, value in ot.labels_yolo.items() if key in labels_str_list_whitelist}
 
-MODEL_OBJ_DET_PATH = 'object_tracking/yoloV8_models/yolov8n.pt'
-MODEL_SEG_PATH = 'object_tracking/yoloV8_models/yolov8n-seg.pt'
+model_obj_det_path = 'vision_package/yoloV8_models/yolov8n.pt'
+model_seg_path = 'vision_package/yoloV8_models/yolov8n-seg.pt'
 
-#frame_global = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
+# frame_global = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
 
 flight_phase = 'Pre-Flight'
 
@@ -57,21 +60,25 @@ img_obj_det_q = deque(maxlen=1)'''
 
 controller_initialized = threading.Event()
 
+
 #######################################################################################################################
 
 
 def yolo_thread():
     print('[YOLO-THREAD]: Thread started')
-    global img_obj_det, exit_program, img_obj_det_q, landing_zone_xy_q, frame_q #, frame_global
+    global lz_finder, img_obj_det, exit_program, img_obj_det_q, landing_zone_xy_q, frame_q  # , frame_global
 
     # load models
-    model_obj_det = YOLO(MODEL_OBJ_DET_PATH)
+    model_obj_det = YOLO(model_obj_det_path)
     print("[YOLO-THREAD]: Object Detection Model loaded")
-    model_seg = YOLO(MODEL_SEG_PATH)
-    print("[YOLO-THREAD]: Segmentation Model loaded")
-    lz_finder = ot.LzFinder(model_obj_det=model_obj_det, model_seg=model_seg, labels=ot.labels_yolo, res=RES,
-                            label_list=CLASSES_WHITE_LIST, use_seg=False, r_landing_factor=R_LANDING_FACTOR,
-                            stride=STRIDE)
+    model_seg = YOLO(model_seg_path)
+
+    lz_finder = LzFinder(model_obj_det=model_obj_det_path, model_seg=model_seg_path,
+                         res=(640, 480), r_landing_factor=10, stride=100,
+                         labels_dic_filtered=labels_dic_filtered,
+                         use_seg=True)
+
+
     landing_zone_xy, img_obj_det, _ = lz_finder.get_final_lz(dummy_img_for_init)
     print('[YOLO-THREAD]: yolo_thread fully initialized')
 
@@ -89,8 +96,7 @@ def yolo_thread():
             pass'''
 
         try:
-            frame_global = frame_q.get()
-            #frame_global = frame_queue.get()
+            frame_global = frame_q.get()  # frame_global = frame_queue.get()
         except queue.Empty:
             print('[YOLO-THREAD]: frame_queue is empty')
             pass
@@ -100,14 +106,15 @@ def yolo_thread():
             yolo_inference_start_time = time.time()
             landing_zone_xy, img_obj_det, _ = lz_finder.get_final_lz(frame_global)
             yolo_inference_end_time = time.time()
-            print('[YOLO-THREAD]: finished inference: ' + str((yolo_inference_end_time - yolo_inference_start_time) * 1000))
+            print('[YOLO-THREAD]: finished inference: ' + str(
+                (yolo_inference_end_time - yolo_inference_start_time) * 1000))
         else:
             print('[YOLO-THREAD]: frame_global is None')
             pass
 
         if landing_zone_xy is not None:
             print(f'[YOLO-THREAD]: Landing Zone: {landing_zone_xy}')
-            #landing_zone_xy_q.append(landing_zone_xy)
+            # landing_zone_xy_q.append(landing_zone_xy)
             with landing_zone_xy_q.mutex:
                 landing_zone_xy_q.queue.clear()
             landing_zone_xy_q.put(landing_zone_xy)
@@ -117,7 +124,7 @@ def yolo_thread():
 
         if img_obj_det is not None:
             print(f'[YOLO-THREAD]: img_obj_det: {img_obj_det.shape}')
-            #img_obj_det_q.append(img_obj_det)
+            # img_obj_det_q.append(img_obj_det)
             with img_obj_det_q.mutex:
                 img_obj_det_q.queue.clear()
             img_obj_det_q.put(img_obj_det)
@@ -158,14 +165,13 @@ class DroneController:
         print('[CONTROLLER-THREAD]: init finished')
         controller_initialized.set()
 
-
     def run(self):
         print('[CONTROLLER-THREAD]: run started')
 
-        global img_obj_det, exit_program, prev_error, img_obj_det_q, landing_zone_xy_q, frame_q #, frame_global
+        global lz_finder, img_obj_det, exit_program, prev_error, img_obj_det_q, landing_zone_xy_q, frame_q  # , frame_global
 
-        #frame_global = None
-        prev_error = (0,0,0,0)
+        # frame_global = None
+        prev_error = (0, 0, 0, 0)
         frame = self.drone.get_frame()
         img_april_tag = None
         img_obj_det_before = dummy_img_for_init
@@ -178,8 +184,8 @@ class DroneController:
 
             rc_values = (0, 0, 0, 0)
             area = 0
-            target_xy = (0,0)
-            landing_zone_xy = (0,0)
+            target_xy = (0, 0)
+            landing_zone_xy = (0, 0)
             img_obj_det_new = None
 
             frame = self.drone.get_frame()
@@ -187,7 +193,7 @@ class DroneController:
 
             for event in pygame.event.get():
                 if event.type == USEREVENT + 2:
-                    #frame_q.append(frame)
+                    # frame_q.append(frame)
                     with frame_q.mutex:
                         frame_q.queue.clear()
                     frame_q.put(frame)
@@ -253,7 +259,7 @@ class DroneController:
                 except queue.Empty:
                     print('[CONTROLLER-THREAD]: queue is empty')
 
-                #if self.auto_pilot.auto_pilot_armed:
+                # if self.auto_pilot.auto_pilot_armed:
                 try:
                     landing_zone_xy = landing_zone_xy_q.get_nowait()
                 except queue.Empty:
@@ -290,7 +296,6 @@ class DroneController:
             # send rc commands to drone; order: 1) keyboard, 2) auto_pilot, 3) default (0,0,0,0)
             self.drone.me.send_rc_control(rc_values[0], rc_values[1], rc_values[2], rc_values[3])
 
-
             # get drone sensor data for display in pygame
             battery_level, temperature, flight_time, _, _ = self.drone.get_drone_sensor_data()
 
@@ -298,7 +303,8 @@ class DroneController:
             if self.drone.flight_phase == "Take-off":
                 pass  # no video feed first, first cool down using fans
             elif self.drone.flight_phase == "Hover":
-                # put small green dot in the middle of the screen
+                # TESTING OUT SEG LIVE VIEW
+                frame = lz_finder.segEngine.infer_image(frame)
                 frame = ut.add_central_dot(frame)
                 self.py_game.display_video_feed(self.screen, frame)
             elif self.drone.flight_phase == "Approach":
@@ -325,7 +331,8 @@ class DroneController:
             pygame.display.flip()
 
             controller_loop_end_time = time.time()
-            print("[CONTROLLER-THREAD]: Loop Time: " + str((controller_loop_end_time - controller_loop_start_time) * 1000))
+            print("[CONTROLLER-THREAD]: Loop Time: " + str(
+                (controller_loop_end_time - controller_loop_start_time) * 1000))
 
             time.sleep(1 / FPS)
 
@@ -334,14 +341,12 @@ class DroneController:
 
 
 def main():
-
     thread_yolo = threading.Thread(target=yolo_thread, args=())
     thread_yolo.daemon = True
     thread_yolo.start()
 
     yolo_drone = DroneController()
     yolo_drone.run()
-
 
 
 if __name__ == '__main__':

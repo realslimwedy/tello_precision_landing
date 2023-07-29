@@ -63,6 +63,11 @@ def video_capture_key_pressed(video_capture_on, pygame_instance):
         return True
     return False
 
+def risk_map_key_pressed(pygame_instance):
+    py_g = pygame_instance
+    if py_g.get_key('r'):
+        return True
+    return False
 
 def exit_app_key_pressed(pygame_instance):
     py_g = pygame_instance

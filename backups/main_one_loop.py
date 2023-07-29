@@ -25,9 +25,9 @@ if __name__ == '__main__':
                'couch', 'potted plant', 'bed', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone', 'microwave',
                'book', 'clock', 'vase', 'scissors', 'toothbrush', 'background']
 
-    MODEL_OBJ_DET = YOLO('../code/object_tracking/yoloV8_models/yolov8n.pt')
+    MODEL_OBJ_DET = YOLO('../code/vision_package/yoloV8_models/yolov8n.pt')
     print("Object Detection Model loaded")
-    MODEL_SEG = YOLO('../code/object_tracking/yoloV8_models/yolov8n-seg.pt')
+    MODEL_SEG = YOLO('../code/vision_package/yoloV8_models/yolov8n-seg.pt')
     print("Segmentation Model loaded")
 
     # Init Landing Zone Finder

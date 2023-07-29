@@ -20,9 +20,9 @@ if __name__ == '__main__':
     # Init YOLO
     CLASSES = ["apple", "banana", "background", "book", "person"]
 
-    MODEL_OBJ_DET = YOLO('../code/object_tracking/yoloV8_models/yolov8n.pt')
+    MODEL_OBJ_DET = YOLO('../code/vision_package/yoloV8_models/yolov8n.pt')
     print("Object Detection Model loaded")
-    MODEL_SEG = YOLO('../code/object_tracking/yoloV8_models/yolov8n-seg.pt')
+    MODEL_SEG = YOLO('../code/vision_package/yoloV8_models/yolov8n-seg.pt')
     print("Segmentation Model loaded")
 
     # Init Landing Zone Finder
