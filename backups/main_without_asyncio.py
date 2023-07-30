@@ -82,7 +82,7 @@ while True:
         cv2.destroyAllWindows()
 
 
-    if tp.save_image_key_pressed():
+    if tp.taking_pictures_key_pressed():
         img=me.get_frame_read().frame
         img = cv2.flip(img, 0)
         tp.save_image(img)

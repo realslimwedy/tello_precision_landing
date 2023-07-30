@@ -5,10 +5,11 @@ import cv2 as cv
 screen_variables_names_units = {
     'names': {'battery_level': 'Battery Level', 'flight_phase': 'Flight Phase',
               'auto_pilot_armed': 'Auto-Pilot Armed',
-              'speed': 'Speed', 'temperature': 'Temperature', 'flight_time': 'Flight Time'},
-    'units': {'battery_level': '%', 'flight_phase': '', 'auto_pilot_armed': '', 'speed': '',
+              'speed': 'Speed', 'temperature': 'Temperature', 'flight_time': 'Flight Time', 'timer_auto_transition':'Timer Transition', 'distance_tof': 'Height'},
+    'units': {'battery_level': '%', 'flight_phase': '', 'auto_pilot_armed': '', 'speed': '', 'distance_tof': 'cm',
               'temperature': '°C',
-              'flight_time': 'sec'}}
+              'flight_time': 'sec',
+              'timer_auto_transition': 'sec'}}
 
 
 class Pygame():
@@ -67,6 +68,7 @@ class Pygame():
         font = pygame.font.SysFont(None, 25)
         red = (255, 0, 0)
         orange = (255, 165, 0)
+        yellow = (255, 255, 0)
 
         for variable, value in kwargs.items():
             bg_color = (0, 0, 0)
@@ -76,7 +78,7 @@ class Pygame():
             unit = self.screen_variables_names_units['units'].get(variable)
 
             if variable == "battery_level":
-                show_warning = value <= 20
+                show_warning = value <= 25
                 bg_color = red
             elif variable == "auto_pilot_armed":
                 show_warning = value == True
@@ -95,7 +97,16 @@ class Pygame():
                 elif value > 90:
                     show_warning = True
                     bg_color = red
-
+            elif variable == 'timer_auto_transition':
+                if value < 4:
+                    show_warning = True
+                    bg_color = red
+                elif value < 6:
+                    show_warning = True
+                    bg_color = orange
+                '''elif value < 8:
+                    show_warning = True
+                    bg_color = yellow'''
             elif variable == "speed":
                 show_warning = (value > 50)
                 bg_color = orange

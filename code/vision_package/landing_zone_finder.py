@@ -2,25 +2,35 @@ import math
 import numpy as np
 import cv2 as cv
 from scipy.spatial import distance
-from scipy.ndimage import gaussian_filter
-import time
+from . import yolo_obj_det_util
+from . import yolo_seg_util
+from . import labels
 
 
 class LzFinder:
     def __init__(self, model_obj_det_path, model_seg_path, labels_dic_filtered, max_det=None, res=(640, 480),
-                 use_seg=True, r_landing_factor=6, stride=75):
-        self.res = res
-        self.width, self.height = res[0], res[1]
-        self.posOb = [0, 0, 0, 0]
-        self.use_seg = use_seg
-        self.r_landing = int(self.width * r_landing_factor / 100)
+                 use_seg_for_lz=False, r_landing_factor=6, stride=75, verbose=False, weightDist=0, weightRisk=0, weightOb=15, draw_lzs=True):
+        self.weightDist = weightDist
+        self.weightRisk = weightRisk
+        self.weightOb = weightOb
+        self.draw_lzs = draw_lzs
+        self.use_seg = use_seg_for_lz
         self.stride = stride
         self.labels_dic_filtered = labels_dic_filtered
-        self.label_ids = list(self.labels_dic_filtered.values())
-        self.obstacles = []
 
-        self.objectDetector = ObjectDetector(model_obj_det_path, self.labels_dic_filtered, max_det)
-        self.segEngine = SegmentationEngine(model_seg_path, self.labels_dic_filtered)
+        self.width, self.height = res
+        self.r_landing = int(self.width * r_landing_factor / 100)
+
+        self.obstacles = []
+        self.posOb = [0, 0, 0, 0]
+
+        self.object_detector = yolo_obj_det_util.ObjectDetector(model_path=model_obj_det_path,
+                                                                labels_dic_filtered=self.labels_dic_filtered,
+                                                                max_det=max_det, verbose=verbose)
+
+        self.seg_engine = yolo_seg_util.SegmentationEngine(model_path=model_seg_path,
+                                                           labels_dic_filtered=self.labels_dic_filtered,
+                                                           verbose=verbose)
 
     def __str__(self):
         return f"""
@@ -32,13 +42,13 @@ Labels: {self.labels_dic_filtered}"""
 
     def get_final_lz(self, img):
 
-        _, objs = self.objectDetector.infer_image(height=self.height, width=self.width, img=img,
-                                                  drawBoxes=True)  # this takes around 150ms / 99% of iteration time
+        _, objs = self.object_detector.infer_image(height=self.height, width=self.width, img=img,
+                                                   drawBoxes=True)  # this takes around 150ms / 99% of iteration time
 
         if self.use_seg:
-            segImg = self.segEngine.infer_image(img)
+            segImg = self.seg_engine.infer_image(img=img, width=self.width, height=self.height)
         else:
-            segImg = self.segEngine.infer_image_dummy(img)
+            segImg = self.seg_engine.infer_image_dummy(img)
 
         self.obstacles = []
 
@@ -63,7 +73,7 @@ Labels: {self.labels_dic_filtered}"""
         if lzs_ranked:
             landing_zone = lzs_ranked[-1]
             landing_zone_xy = landing_zone["position"]
-            img = self.draw_lzs_obs(lzs_ranked[-1:], self.obstacles, img)  # if no lz, nothing is drawn
+            img = self.draw_lzs_obs(lzs_ranked[-1:], self.obstacles, img, thickness=2, draw_lzs=self.draw_lzs)  # if no lz, nothing is drawn
         else:
             print("No landing zone found.")
             landing_zone_xy = None
@@ -123,7 +133,7 @@ Labels: {self.labels_dic_filtered}"""
             "float32")  # REALLY NEEDED??? Convert seg_img to float32
 
         for key in self.labels_dic_filtered:
-            risk_value = np.float32(risk_table[key].value)
+            risk_value = np.float32(labels.risk_table[key].value)
             risk_array_with_risk_level = np.where(risk_array_with_risk_level == self.labels_dic_filtered[key],
                                                   risk_value, risk_array_with_risk_level)
 
@@ -199,13 +209,14 @@ Labels: {self.labels_dic_filtered}"""
         return 1 - abs(dist / furthestDistance)  # 1 minus because we want to maximise the distance???
 
     @classmethod
-    def draw_lzs_obs(cls, list_lzs, list_obs, img, thickness=2):
+    def draw_lzs_obs(cls, list_lzs, list_obs, img, thickness=2, draw_lzs=True):
         for obstacle in list_obs:
             cv.circle(img, (obstacle[0], obstacle[1]), obstacle[2], (0, 0, 255), thickness=thickness, )
-        for lz in list_lzs:
-            posLz = lz.get("position")
-            radLz = lz.get("radius")
-            cv.circle(img, (posLz[0], posLz[1]), radLz, (0, 255, 0), thickness=thickness)
+        if draw_lzs:
+            for lz in list_lzs:
+                posLz = lz.get("position")
+                radLz = lz.get("radius")
+                cv.circle(img, (posLz[0], posLz[1]), radLz, (0, 255, 0), thickness=thickness)
         return img
 
     @classmethod
@@ -245,56 +256,4 @@ Labels: {self.labels_dic_filtered}"""
 
 
 if __name__ == "__main__":
-
-    from labels import labels_yolo, risk_table
-    from yolo_obj_det_util import ObjectDetector
-    from yolo_seg_util import SegmentationEngine
-
-    labels_str_list_blacklist = ['train', 'stop sign', 'bottle', 'carrot', "dining table"]
-    labels_str_list_whitelist = [cls for cls in labels_yolo.keys() if cls not in labels_str_list_blacklist]
-    labels_dic_filtered = {key: value for key, value in labels_yolo.items() if key in labels_str_list_whitelist}
-
-    model1_path = 'yoloV8_models/yolov8n.pt'
-    model2_path = 'yoloV8_models/yolov8n-seg.pt'
-
-    lz_finder = LzFinder(model_obj_det_path=model1_path, model_seg_path=model2_path, res=(640, 480),
-                         r_landing_factor=10, stride=100, labels_dic_filtered=labels_dic_filtered, use_seg=False,
-                         max_det=None)
-
-    print(lz_finder)
-
-    landing_zone_xy_avg_list = []
-
-    cap = cv.VideoCapture(0)
-
-    while True:
-        start_time = time.time()
-        ret, frame = cap.read()
-
-        if not ret:
-            break
-
-        frame = cv.resize(frame, lz_finder.res)
-
-        landing_zone_xy, img, risk_map = lz_finder.get_final_lz(frame)  # this step takes most time: ~~300 ms
-
-        landing_zone_xy_avg, landing_zone_xy_rolling_list = lz_finder.rolling_average(landing_zone_xy_avg_list,
-                                                                                      landing_zone_xy, 5)
-
-        print("Landing Zone: ", landing_zone_xy)
-        print("Landing Zone Average: ", landing_zone_xy_avg)
-        print("Landing Zone Rolling List: ", landing_zone_xy_rolling_list)
-
-        # 1) Landing Zone
-        cv.imshow("Landing Zone", img)
-
-        # 2) Risk Map
-        #risk_map = cv.applyColorMap(risk_map, cv.COLORMAP_BONE)
-        #cv.imshow("Risk Map", risk_map)
-
-        if cv.waitKey(1) == ord('q'):
-            break
-
-        end_time = time.time()
-        print('Loop took {} ms'.format((end_time - start_time) * 1000.0))
-        print('FPS: {}'.format(round(1 / (end_time - start_time))))
+    pass

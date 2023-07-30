@@ -1,14 +1,13 @@
 from ultralytics import YOLO
 import cv2 as cv
-import time
 
 
 class ObjectDetector():
-    def __init__(self, model_path, labels_dic_filtered, max_det=None):
+    def __init__(self, model_path, labels_dic_filtered, verbose=False, max_det=None):
         self.model = YOLO(model_path)
         self.labels_dic_filtered = labels_dic_filtered
         self.max_det = max_det
-
+        self.verbose = verbose
         self.labels_ids_list_whitelist = list(labels_dic_filtered.values())
 
         self.labels_dic_filtered_inverted = {value: key for key, value in labels_dic_filtered.items()}
@@ -28,9 +27,12 @@ class ObjectDetector():
                 # Draw the bounding box rectangle and label on the image
                 cv.rectangle(img, (x, y), (x + w, y + h), self.color, 2)
 
+                text_x = x + 5
+                text_y = y + 20
+
                 text = "{}: {:4f}".format(self.labels_dic_filtered_inverted[classids[i]], confidences[i])
 
-                cv.putText(img, text, (x, y - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, self.color, 2)
+                cv.putText(img, text, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX, 0.5, self.color, 2)
 
         return img
 
@@ -76,7 +78,7 @@ class ObjectDetector():
         '''
 
         if infer:
-            results = self.model.predict(img, verbose=True, classes=self.labels_ids_list_whitelist,
+            results = self.model.predict(img, verbose=self.verbose, classes=self.labels_ids_list_whitelist,
                                          max_det=self.max_det)  # this takes 99% of the time
 
             objects = results[0].boxes
@@ -95,42 +97,9 @@ class ObjectDetector():
                 obstacles.append(obstDetected)
 
         if drawBoxes:
-            img = self.draw_labels_and_boxes(img, boxes, confidences, classids)
-        return img, obstacles
+            img_obj_det_annotated = self.draw_labels_and_boxes(img, boxes, confidences, classids)
+        return img_obj_det_annotated, obstacles
 
 
 if __name__ == '__main__':
-
-    import labels
-
-    labels_str_list_blacklist = ['train', 'stop sign', 'bottle', 'carrot', "dining table"]
-    labels_str_list_whitelist = [cls for cls in labels.labels_yolo.keys() if cls not in labels_str_list_blacklist]
-    labels_dic_filtered = {key: value for key, value in labels.labels_yolo.items() if key in labels_str_list_whitelist}
-
-    model_path = 'yoloV8_models/yolov8n.pt'
-
-    object_detector = ObjectDetector(model_path, labels_dic_filtered)
-    cap = cv.VideoCapture(0)
-
-    while True:
-        start_time = time.time()
-
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        frame = cv.resize(frame, (640, 480))
-
-        height, width = frame.shape[:2]
-
-        img, obstacles = object_detector.infer_image(height, width, frame)
-
-        cv.imshow("YOLOv8 Inference", img)
-        cv.waitKey(1)
-
-        stop_time = time.time()
-        print(f'Loop Time: {(stop_time - start_time) * 1000} ms')
-        print(f"FPS: {1 / (stop_time - start_time)}")
-
-        if cv.waitKey(1) == ord('q'):
-            break
+    pass

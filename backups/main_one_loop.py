@@ -32,7 +32,7 @@ if __name__ == '__main__':
 
     # Init Landing Zone Finder
     lz_finder = ot.LzFinder(model_obj_det=MODEL_OBJ_DET, model_seg=MODEL_SEG, labels=LABELS_YOLO, res=RES,
-                            label_list=CLASSES, use_seg=False, r_landing_factor=8, stride=75)
+                            label_list=CLASSES, use_seg_for_lz=False, r_landing_factor=8, stride=75)
     print(lz_finder)
 
     # init pygame

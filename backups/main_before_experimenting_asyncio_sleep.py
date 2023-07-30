@@ -20,7 +20,7 @@ if __name__ == '__main__':
     print("Segmentation Model loaded")
 
     # Init Landing Zone Finder
-    lz_finder = ot.LzFinder(model_obj_det=model_obj_det, model_seg=model_seg, res=res, label_list=classes, use_seg=True,
+    lz_finder = ot.LzFinder(model_obj_det=model_obj_det, model_seg=model_seg, res=res, label_list=classes, use_seg_for_lz=True,
                             r_landing_factor=8, stride=75)
     print(lz_finder)
 

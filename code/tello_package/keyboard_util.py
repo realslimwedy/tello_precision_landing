@@ -36,19 +36,13 @@ def keyboard_rc(drone, rc_values, pygame_instance, speed):
         yv = -speed
 
     # Flips
-    if py_g.get_key('7'):
+    if py_g.get_key('0'):
         drone.me.flip_forward()
-    elif py_g.get_key('8'):
-        drone.me.flip_back()
-    elif py_g.get_key('9'):
-        drone.me.flip_right()
-    elif py_g.get_key('0'):
-        drone.me.flip_left()
 
     return lr, fb, ud, yv
 
 
-def save_image_key_pressed(pygame_instance):
+def taking_pictures_key_pressed(pygame_instance):
     py_g = pygame_instance
     if py_g.get_key('SPACE'):
         print('SPACE pressed - Image saving...')
@@ -109,8 +103,26 @@ def landing_phase_key_pressed(pygame_instance):
     py_g = pygame_instance
     if py_g.get_key('4'):
         return True
+    print("4 pressed: Landing phase...")
     return False
 
+def exploration_obj_det_phase_key_pressed(pygame_instance):
+    py_g = pygame_instance
+    if py_g.get_key('5'):
+        return True
+    return False
+
+def exploration_seg_phase_key_pressed(pygame_instance):
+    py_g = pygame_instance
+    if py_g.get_key('6'):
+        return True
+    return False
+
+def exploration_lz_finder_key_pressed(pygame_instance):
+    py_g = pygame_instance
+    if py_g.get_key('7'):
+        return True
+    return False
 
 def switch_speed_key_pressed(pygame_instance):
     py_g = pygame_instance
