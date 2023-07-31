@@ -11,7 +11,7 @@ class ObjectDetector():
         self.labels_ids_list_whitelist = list(labels_dic_filtered.values())
 
         self.labels_dic_filtered_inverted = {value: key for key, value in labels_dic_filtered.items()}
-        self.color = [0, 255, 0]  # Green
+        self.color = [0, 0, 0]  # black
 
     def __str__(self):
         return f"ObjectDetector instance with model: {self.model}"
@@ -69,8 +69,8 @@ class ObjectDetector():
 
         return boxes, confidences, classids
 
-    def infer_image(self, height, width, img, boxes=None, confidences=None, classids=None, infer=True, confidence=0.25,
-                    drawBoxes=True, ):
+    def infer_image(self, height, width, img, boxes=None, confidences=None, class_ids=None, infer=True, confidence=0.25,
+                    draw_boxes=True, ):
         '''
         Function returns the labelled image and the obstacles detected
         obstacles are returned as a list of dictionaries
@@ -83,21 +83,21 @@ class ObjectDetector():
 
             objects = results[0].boxes
             # Generate the boxes, confidences, and classIDs
-            boxes, confidences, classids = self.generate_boxes_confidences_classids(objects, height, width, confidence)
+            boxes, confidences, class_ids = self.generate_boxes_confidences_classids(objects, height, width, confidence)
 
             # Apply Non-Maxima Suppression to suppress overlapping bounding boxes  # idxs = cv.dnn.NMSBoxes(boxes, confidences, confidence, threshold)
 
-        if boxes is None or confidences is None or classids is None:
+        if boxes is None or confidences is None or class_ids is None:
             raise "[ERROR] Required variables are set to None before drawing boxes on images."
 
         obstacles = []
         if len(boxes) > 0:
             for i in range(len(boxes)):
-                obstDetected = {"label": classids[i], "confidence": confidences[i], "box": boxes[i], }
+                obstDetected = {"label": class_ids[i], "confidence": confidences[i], "box": boxes[i], }
                 obstacles.append(obstDetected)
 
-        if drawBoxes:
-            img_obj_det_annotated = self.draw_labels_and_boxes(img, boxes, confidences, classids)
+        if draw_boxes:
+            img_obj_det_annotated = self.draw_labels_and_boxes(img, boxes, confidences, class_ids)
         return img_obj_det_annotated, obstacles
 
 

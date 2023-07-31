@@ -1,5 +1,6 @@
 import time
 
+# KEYBOARD RC ##########################################################################################################
 
 def keyboard_rc(drone, rc_values, pygame_instance, speed):
     py_g = pygame_instance
@@ -41,6 +42,7 @@ def keyboard_rc(drone, rc_values, pygame_instance, speed):
 
     return lr, fb, ud, yv
 
+# IMAGE CAPTURE #######################################################################################################
 
 def taking_pictures_key_pressed(pygame_instance):
     py_g = pygame_instance
@@ -57,11 +59,7 @@ def recording_video_key_pressed(pygame_instance):
         return True
     return False
 
-def risk_map_key_pressed(pygame_instance):
-    py_g = pygame_instance
-    if py_g.get_key('r'):
-        return True
-    return False
+# EXIT #################################################################################################################
 
 def exit_app_key_pressed(pygame_instance):
     py_g = pygame_instance
@@ -69,6 +67,7 @@ def exit_app_key_pressed(pygame_instance):
         return True
     return False
 
+# AUTO-PILOT ##########################################################################################################
 
 def auto_pilot_key_pressed(pygame_instance):
     py_g = pygame_instance
@@ -77,6 +76,7 @@ def auto_pilot_key_pressed(pygame_instance):
         return True
     return False
 
+# FLIGHT PHASES ######################################################################################################
 
 def takeoff_phase_key_pressed(pygame_instance):
     py_g = pygame_instance
@@ -92,37 +92,41 @@ def hover_phase_key_pressed(pygame_instance):
     return False
 
 
-def approach_phase_key_pressed(pygame_instance):
+def obj_det_phase_key_pressed(pygame_instance):
     py_g = pygame_instance
     if py_g.get_key('3'):
         return True
     return False
 
 
-def landing_phase_key_pressed(pygame_instance):
+def seg_phase_key_pressed(pygame_instance):
     py_g = pygame_instance
     if py_g.get_key('4'):
         return True
-        print("4 pressed: Landing phase...")
     return False
 
-def exploration_obj_det_phase_key_pressed(pygame_instance):
+
+def lz_finder_key_pressed(pygame_instance):
     py_g = pygame_instance
     if py_g.get_key('5'):
         return True
     return False
 
-def exploration_seg_phase_key_pressed(pygame_instance):
+
+def approach_phase_key_pressed(pygame_instance):
     py_g = pygame_instance
     if py_g.get_key('6'):
         return True
     return False
 
-def exploration_lz_finder_key_pressed(pygame_instance):
+
+def landing_phase_key_pressed(pygame_instance):
     py_g = pygame_instance
     if py_g.get_key('7'):
         return True
     return False
+
+# SPEED ###############################################################################################################
 
 def switch_speed_key_pressed(pygame_instance):
     py_g = pygame_instance

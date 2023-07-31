@@ -66,6 +66,7 @@ class Pygame():
         red = (255, 0, 0)
         orange = (255, 165, 0)
         yellow = (255, 255, 0)
+        blue = (0, 0, 255)
 
         for variable, value in kwargs.items():
             bg_color = (0, 0, 0)
@@ -79,7 +80,7 @@ class Pygame():
                 bg_color = red
             elif variable == "auto_pilot_armed":
                 show_warning = value == True
-                bg_color = orange
+                bg_color = blue
             elif variable == "flight_phase":
                 if value == "Approach":
                     show_warning = True

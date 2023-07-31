@@ -67,7 +67,7 @@ def rolling_average_of_float_values(list_of_float_values, new_float_value, numbe
 
 
 # define function to take an image and return the image with a green dot in the middle
-def add_central_dot(image, radius=5, color=(0, 255, 0), thickness=-1):
+def add_central_dot(image, radius=5, color=(0, 0, 0), thickness=-1):
     radius = radius
     color = color
     thickness = thickness

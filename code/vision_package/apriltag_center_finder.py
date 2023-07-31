@@ -84,7 +84,7 @@ class ApriltagFinder:
 
             area = cv.contourArea(np.array([corner_01, corner_02, corner_03, corner_04]))
 
-            cv.putText(image, str(tag_id), (center[0] - 10, center[1] - 10), cv.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255),
+            cv.putText(image, str(tag_id), (center[0] - 10, center[1] - 10), cv.FONT_HERSHEY_SIMPLEX, 1.25, (0, 0, 255),
                        2, cv.LINE_AA)
 
         return image, center, area
