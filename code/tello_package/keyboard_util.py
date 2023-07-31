@@ -50,7 +50,7 @@ def taking_pictures_key_pressed(pygame_instance):
     return False
 
 
-def video_capture_key_pressed(video_capture_on, pygame_instance):
+def recording_video_key_pressed(pygame_instance):
     py_g = pygame_instance
     if py_g.get_key('v'):
         print('v pressed: Video capture...')
@@ -103,7 +103,7 @@ def landing_phase_key_pressed(pygame_instance):
     py_g = pygame_instance
     if py_g.get_key('4'):
         return True
-    print("4 pressed: Landing phase...")
+        print("4 pressed: Landing phase...")
     return False
 
 def exploration_obj_det_phase_key_pressed(pygame_instance):

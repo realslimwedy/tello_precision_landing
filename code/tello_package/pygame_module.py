@@ -1,15 +1,12 @@
 import pygame
 import cv2 as cv
 
-
 screen_variables_names_units = {
-    'names': {'battery_level': 'Battery Level', 'flight_phase': 'Flight Phase',
-              'auto_pilot_armed': 'Auto-Pilot Armed',
-              'speed': 'Speed', 'temperature': 'Temperature', 'flight_time': 'Flight Time', 'timer_auto_transition':'Timer Transition', 'distance_tof': 'Height'},
+    'names': {'battery_level': 'Battery Level', 'flight_phase': 'Flight Phase', 'auto_pilot_armed': 'Auto-Pilot Armed',
+              'speed': 'Speed', 'temperature': 'Temperature', 'flight_time': 'Flight Time',
+              'timer_auto_transition': 'Timer Transition', 'distance_tof': 'Height', 'video_recording_on': 'Video Recording', 'taking_pictures_on': 'Taking Pictures', 'auto_pilot_speed':'Auto-Pilot Speed'},
     'units': {'battery_level': '%', 'flight_phase': '', 'auto_pilot_armed': '', 'speed': '', 'distance_tof': 'cm',
-              'temperature': '°C',
-              'flight_time': 'sec',
-              'timer_auto_transition': 'sec'}}
+              'temperature': '°C', 'flight_time': 'sec', 'timer_auto_transition': 'sec', 'video_recording_on': '', 'taking_pictures_on': '', 'auto_pilot_speed': 'm/s'}}
 
 
 class Pygame():
@@ -44,7 +41,7 @@ class Pygame():
 
     def display_status(self, screen, text, show_warning=False):
         self.screen = screen
-        font = pygame.font.SysFont(None, 25)
+        font = pygame.font.SysFont(None, 20)
 
         if show_warning:
             status_text = font.render(text, True, (255, 0, 0))  # Red color (R, G, B)
@@ -98,10 +95,10 @@ class Pygame():
                     show_warning = True
                     bg_color = red
             elif variable == 'timer_auto_transition':
-                if value < 4:
+                if value < 2:
                     show_warning = True
                     bg_color = red
-                elif value < 6:
+                elif value < 5:
                     show_warning = True
                     bg_color = orange
                 '''elif value < 8:
@@ -110,6 +107,14 @@ class Pygame():
             elif variable == "speed":
                 show_warning = (value > 50)
                 bg_color = orange
+            elif variable == "video_recording_on":
+                if value == True:
+                    show_warning = True
+                    bg_color = yellow
+            elif variable == "taking_pictures_on":
+                if value == True:
+                    show_warning = True
+                    bg_color = yellow
 
             status_text = font.render(f'{name}: {value} {unit}', True, (255, 255, 255))
 

@@ -23,7 +23,6 @@ drone_is_on: {self.drone_is_on}
 flight_phase: {self.flight_phase}'''
 
     def power_up(self):
-        connect_to_wifi(tello_wifi)
         self.me.connect()
         self.drone_is_on = True
         print('#######################################################')

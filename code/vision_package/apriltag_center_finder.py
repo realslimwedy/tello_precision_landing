@@ -61,8 +61,8 @@ class ApriltagFinder:
         return debug_image, center, area
 
     def draw_tags(self, image, tags, ):
-        center = None
-        area = None
+        center = (0,0)
+        area = 0
         for tag in tags:
             tag_family = tag.tag_family
             tag_id = tag.tag_id
