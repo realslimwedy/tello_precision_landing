@@ -8,7 +8,7 @@ if __name__ == '__main__':
     labels = {key: value for key, value in labels_yolo.items() if key in label_list}
     label_ids = list(labels.values())
 
-    model = YOLO('yoloV8_models/yolov8n.pt')
+    model = YOLO('../code/vision_package/yoloV8_models/yolov8n.pt')
 
     cap = cv.VideoCapture(0)
 

@@ -84,10 +84,10 @@ class Pygame():
             elif variable == "flight_phase":
                 if value == "Approach":
                     show_warning = True
-                    bg_color = orange
+                    # bg_color = orange
                 elif value == "Landing":
                     show_warning = True
-                    bg_color = red
+                    # bg_color = red
             elif variable == "temperature":
                 if value > 85:
                     show_warning = True

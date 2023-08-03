@@ -41,7 +41,8 @@ USE_SEG_FOR_LZ = False
 APRILTAG_FACTOR = 2
 AUTO_PILOT_SPEED_APPROACH = 40
 AUTO_PILOT_SPEED_LANDING = 10
-POSITION_TOLERANCE_THRESHOLD = 20  # from 0 to 100; [CONTROLLER-THREAD]: error:  (17.1875, 0.8333333333333334, -15.769675925925927, 0)
+POSITION_TOLERANCE_THRESHOLD_APPROACH = 20  # from 0 to 100; [CONTROLLER-THREAD]: error:  (17.1875, 0.8333333333333334, -15.769675925925927, 0)
+POSITION_TOLERANCE_THRESHOLD_LANDING = 10
 AUTO_TRANSITION_TIMER_APPROACH = 5  # seconds
 AUTO_TRANSITION_TIMER_LANDING = 5  # seconds
 
@@ -154,7 +155,7 @@ class DroneController:
         # AUTO PILOT
         self.auto_pilot = tp.Autopilot(res=RES, auto_pilot_speed=AUTO_PILOT_SPEED_APPROACH,
                                        apriltag_factor=APRILTAG_FACTOR,
-                                       position_tolerance_threshold=POSITION_TOLERANCE_THRESHOLD)
+                                       position_tolerance_threshold=POSITION_TOLERANCE_THRESHOLD_APPROACH)
 
         # IMAGE CAPTURE
         self.image_capture = tp.ImageCapture(resolution=RES, fps_video_recording=FPS_FOR_VIDEO_RECORDING)
@@ -174,8 +175,8 @@ class DroneController:
         self.lz_finder = vp.LzFinder(model_obj_det_path=MODEL_OBJ_DET_PATH, model_seg_path=MODEL_SEG_PATH,
                                      labels_dic_filtered=LABELS_DIC_FILTERED, max_det=MAX_DET, res=RES,
                                      use_seg_for_lz=USE_SEG_FOR_LZ, r_landing_factor=R_LANDING_FACTOR, stride=STRIDE,
-                                     verbose=True, weight_dist=WEIGHT_DIST, weight_risk=WEIGHT_RISK, weight_obs=WEIGHT_OB,
-                                     draw_lzs=True)
+                                     verbose=True, weight_dist=WEIGHT_DIST, weight_risk=WEIGHT_RISK,
+                                     weight_obs=WEIGHT_OB, draw_lzs=False)
         _, _, _ = self.lz_finder.get_final_lz(dummy_img_for_init)
         print('[CONTROLLER-THREAD]: lz_finder initialized including DUMMY inference')
 
@@ -211,6 +212,10 @@ class DroneController:
         list_of_position_clearance_timestamps = []
         seconds_within_current_clearance_period = 0
         auto_transition_timer = AUTO_TRANSITION_TIMER_APPROACH
+        position_tolerance_threshold = POSITION_TOLERANCE_THRESHOLD_APPROACH
+
+        # Pygame
+        color = BLUE
 
         self.py_game.display_video_feed(self.screen, blank_img_for_takeoff_touchdown_screen)
 
@@ -329,7 +334,6 @@ class DroneController:
                 list_of_lz_tuples = []
                 print('[CONTROLLER-THREAD]: Landing phase +++++++++++++++++')
 
-
             # control image capture
             if tp.taking_pictures_key_pressed(self.py_game):
                 taking_pictures_on = not taking_pictures_on
@@ -370,12 +374,17 @@ class DroneController:
 
             elif self.drone.flight_phase == "YOLO Object Detection":
                 pass
+
             elif self.drone.flight_phase == "YOLO Segmentation":
                 pass
 
             elif self.drone.flight_phase == "Touch-down":
                 list_of_position_clearance_timestamps = []
                 seconds_within_current_clearance_period = 0
+
+            timer_auto_transition = round(5 - seconds_within_current_clearance_period, 1)
+            if timer_auto_transition < 0:
+                timer_auto_transition = 0
 
             '''try:
                 img_obj_det_from_queue = img_obj_det_q.get_nowait()
@@ -426,8 +435,11 @@ class DroneController:
 
                 if self.drone.flight_phase == "Approach":
                     auto_transition_timer = AUTO_TRANSITION_TIMER_APPROACH
+                    position_tolerance_threshold = POSITION_TOLERANCE_THRESHOLD_APPROACH
+
                 elif self.drone.flight_phase == "Landing":
                     auto_transition_timer = AUTO_TRANSITION_TIMER_LANDING
+                    position_tolerance_threshold = POSITION_TOLERANCE_THRESHOLD_LANDING
 
                 if seconds_within_current_clearance_period >= auto_transition_timer:
                     if self.drone.flight_phase == "Approach":
@@ -435,7 +447,8 @@ class DroneController:
                         seconds_within_current_clearance_period = 0
                         error = (0, 0, 0, 0)
                         prev_error = (0, 0, 0, 0)
-                        self.drone.me.move_down(20)
+                        self.drone.me.move_down(30)
+                        position_tolerance_threshold = POSITION_TOLERANCE_THRESHOLD_LANDING
                         self.auto_pilot.autopilot_speed = AUTO_PILOT_SPEED_LANDING
                         self.drone.flight_phase = "Landing"
                     elif self.drone.flight_phase == "Landing":
@@ -466,10 +479,6 @@ class DroneController:
                 frame_hover = ut.add_central_dot(frame_from_drone)
                 self.py_game.display_video_feed(self.screen, frame_hover)
 
-            elif self.drone.flight_phase == "Approach":
-                img_april_tag = ut.add_central_dot(img_april_tag)
-                img_april_tag = ut.add_central_dot(img_april_tag)
-                self.py_game.display_video_feed(self.screen, img_april_tag)
 
             elif self.drone.flight_phase == "YOLO Object Detection":
                 results_obj_det = self.lz_finder.object_detector.model.predict(source=frame_from_drone,
@@ -491,16 +500,26 @@ class DroneController:
 
                 frame_lz_annotated = ut.add_central_dot(frame_from_drone)
 
-                frame_lz_annotated = cv.circle(frame_lz_annotated, landing_zone_xy_avg, self.lz_finder.r_landing, BLUE, 3)
+                frame_lz_annotated = cv.circle(frame_lz_annotated, landing_zone_xy_avg, self.lz_finder.r_landing, BLUE,
+                                               3)
                 frame_lz_annotated = cv.circle(frame_lz_annotated, landing_zone_xy, self.lz_finder.r_landing, BLUE, 1)
 
                 self.py_game.display_video_feed(self.screen, frame_lz_annotated)
 
+            elif self.drone.flight_phase == "Approach":
+                img_april_tag = ut.add_central_dot(img_april_tag)
+                img_april_tag = ut.add_central_dot(img_april_tag)
+                self.py_game.display_video_feed(self.screen, img_april_tag)
+
             elif self.drone.flight_phase == "Landing":
                 frame_lz_inference = ut.add_central_dot(frame_lz_inference)
-                frame_lz_inference = cv.circle(frame_lz_inference, landing_zone_xy_avg, self.lz_finder.r_landing, BLUE,
+
+                if timer_auto_transition < 2:
+                    color = RED
+
+                frame_lz_inference = cv.circle(frame_lz_inference, landing_zone_xy_avg, self.lz_finder.r_landing, color,
                                                3)
-                frame_lz_inference = cv.circle(frame_lz_inference, landing_zone_xy, self.lz_finder.r_landing, BLUE, 1)
+                frame_lz_inference = cv.circle(frame_lz_inference, landing_zone_xy, self.lz_finder.r_landing, color, 1)
 
                 self.py_game.display_video_feed(self.screen, frame_lz_inference)
 
@@ -516,21 +535,19 @@ class DroneController:
                     print('[CONTROLLER-THREAD]: img_obj_det_from_queue is None')'''
 
             # DISPLAY STATUS
-            timer_auto_transition = round(5 - seconds_within_current_clearance_period, 1)
-            if timer_auto_transition < 0:
-                timer_auto_transition = 0
 
             self.py_game.display_multiple_status(screen=self.screen, v_pos=10, h_pos=10,
-                                                 battery_level=battery_level, flight_time=flight_time,
-                                                 temperature=temperature,
+                                                 battery_level=battery_level,
+                                                 flight_time=flight_time,
+                                                 # temperature=temperature,
                                                  distance_tof=distance_tof,
-                                                 speed=self.drone.speed,
+                                                 # speed=self.drone.speed,
                                                  auto_pilot_speed=self.auto_pilot.autopilot_speed,
                                                  flight_phase=self.drone.flight_phase,
                                                  auto_pilot_armed=self.auto_pilot.auto_pilot_armed,
                                                  timer_auto_transition=timer_auto_transition,
-                                                 taking_pictures_on=taking_pictures_on,
-                                                 video_recording_on=video_recording_on,
+                                                 # taking_pictures_on=taking_pictures_on,
+                                                 # video_recording_on=video_recording_on,
                                                  )
             if battery_level <= 15:
                 self.py_game.display_status(screen=self.screen, text="Battery level low: " + str(battery_level) + "%",
