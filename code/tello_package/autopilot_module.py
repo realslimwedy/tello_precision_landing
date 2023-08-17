@@ -1,6 +1,5 @@
 import numpy as np
 
-
 class Autopilot:
     def __init__(self, res=(640, 480), armed=False, PID=[0.4, 0, 0.4], auto_pilot_speed=25, apriltag_factor=1, position_tolerance_threshold=10):
         self.resolution = res
