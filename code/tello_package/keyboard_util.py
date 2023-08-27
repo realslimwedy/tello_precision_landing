@@ -106,7 +106,7 @@ def seg_phase_key_pressed(pygame_instance):
     return False
 
 
-def lz_finder_key_pressed(pygame_instance):
+def risk_map_key_pressed(pygame_instance):
     py_g = pygame_instance
     if py_g.get_key('5'):
         return True

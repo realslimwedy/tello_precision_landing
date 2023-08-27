@@ -1,9 +1,11 @@
 import numpy as np
 
+
 class Autopilot:
-    def __init__(self, res=(640, 480), armed=False, PID=[0.4, 0, 0.4], auto_pilot_speed=25, apriltag_factor=1, position_tolerance_threshold=10):
+    def __init__(self, res=(640, 480), PID=[0.4, 0, 0.4], auto_pilot_speed=25, apriltag_factor=1,
+                 position_tolerance_threshold=10):
         self.resolution = res
-        self.auto_pilot_armed = armed
+        self.auto_pilot_armed = False
         self.rc_params = (0, 0, 0, 0)
         self.PID = PID
         self.error = (0, 0, 0, 0)
@@ -11,7 +13,7 @@ class Autopilot:
         self.autopilot_speed = auto_pilot_speed
         self.apriltag_final_area_factor = apriltag_factor
         self.apriltag_final_area = (self.resolution[0] * self.resolution[1] * 0.15 ** 2) * (
-                    1 / self.apriltag_final_area_factor)
+                1 / self.apriltag_final_area_factor)
         self.position_tolerance_threshold = position_tolerance_threshold
 
     def __repr__(self):
@@ -46,8 +48,10 @@ apriltag_final_area_factor: {self.apriltag_final_area_factor}
 
         if center_of_target_x is not None:
             # horizontal error
-            lr_error = +1 * (center_of_target_x - width / 2) / (width / 2) * 100  # -100 when tag on left, +100 when tag on right
-            fb_error = -1 * (center_of_target_y - height / 2) / (height / 2) * 100  # -100 when tag on top, +100 when tag on bottom
+            lr_error = +1 * (center_of_target_x - width / 2) / (
+                        width / 2) * 100  # -100 when tag on left, +100 when tag on right
+            fb_error = -1 * (center_of_target_y - height / 2) / (
+                        height / 2) * 100  # -100 when tag on top, +100 when tag on bottom
 
             # vertical error, not limited to 0-100 as area_of_target can be infinitely small
             if area_of_target is not None:
@@ -57,7 +61,8 @@ apriltag_final_area_factor: {self.apriltag_final_area_factor}
                 ud_error = 0
 
             # check if center of target is within tolerance
-            if abs(lr_error) < self.position_tolerance_threshold and abs(fb_error) < self.position_tolerance_threshold and abs(ud_error) < self.position_tolerance_threshold:
+            if abs(lr_error) < self.position_tolerance_threshold and abs(
+                    fb_error) < self.position_tolerance_threshold and abs(ud_error) < self.position_tolerance_threshold:
                 position_within_tolerance = True
 
             error = (lr_error, fb_error, ud_error, 0)
@@ -108,5 +113,3 @@ apriltag_final_area_factor: {self.apriltag_final_area_factor}
             ud = int(np.clip(ud, -self.autopilot_speed, self.autopilot_speed))
 
         return (lr, fb, ud, yv)
-
-

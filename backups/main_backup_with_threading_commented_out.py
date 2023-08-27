@@ -1,11 +1,14 @@
 #######################################################################################################################
 
 # TODOS
+# - [ ] fix warning message to be removed properly
 # - [ ] Scale circle size with drone height
+# - [ ] Add logging
+# - [ ] Check: May poor in-flight perf of yolo due to rc command send in every loop??
 
 # IMPORTS #############################################################################################################
 
-import pygame, sys, time, copy
+import pygame, sys, time, threading, queue, copy
 import cv2 as cv
 import numpy as np
 from pygame import USEREVENT
@@ -15,24 +18,15 @@ import vision_package as vp
 import utils as ut
 from config import tello_wifi
 
+# SENSITIVE PARAMETERS ################################################################################################
+
 # General Parameters
 WIDTH, HEIGHT = 640, 480  # (1280, 720), (640, 480), (320, 240)
 FPS_FOR_VIDEO_RECORDING = 5  # realistically rather 1/250ms i.e. 4 FPS as one loop takes 250ms
 TIMER_FRAME_Q_EVENT = 500  # introduces a delay of 500ms for the frame_q
 
-# Manual RC
-MANUAL_SPEED = 50
-
-# Auto Pilot
-USE_SEG_FOR_LZ = True
-APRILTAG_FACTOR = 2
-AUTO_PILOT_SPEED_APPROACH = 40
-AUTO_PILOT_SPEED_LANDING = 10
-POSITION_TOLERANCE_THRESHOLD_APPROACH = 15  # from 0 to 100;
-POSITION_TOLERANCE_THRESHOLD_LANDING = 15
-AUTO_TRANSITION_TIMER_APPROACH = 5  # seconds
-AUTO_TRANSITION_TIMER_LANDING = 5  # seconds
-PID=[0.4, 0, 0.4]
+# Manual Control
+SPEED = 50
 
 # LZ Finder
 MAX_DET = None
@@ -42,22 +36,18 @@ WEIGHT_DIST = 1
 WEIGHT_RISK = 1
 WEIGHT_OB = 1
 NUMBER_ROLLING_XY_VALUES = 10
-DRAW_LZS_IN_LZ_FINDER=False
 
+# Auto Pilot
+USE_SEG_FOR_LZ = False
+APRILTAG_FACTOR = 2
+AUTO_PILOT_SPEED_APPROACH = 40
+AUTO_PILOT_SPEED_LANDING = 10
+POSITION_TOLERANCE_THRESHOLD_APPROACH = 20  # from 0 to 100; [CONTROLLER-THREAD]: error:  (17.1875, 0.8333333333333334, -15.769675925925927, 0)
+POSITION_TOLERANCE_THRESHOLD_LANDING = 10
+AUTO_TRANSITION_TIMER_APPROACH = 5  # seconds
+AUTO_TRANSITION_TIMER_LANDING = 5  # seconds
 
-# YOLO
-LABELS_STR_LIST_BLACKLIST = ['train', 'stop sign', "dining table"]
-LABELS_STR_LIST_WHITELIST = [cls for cls in vp.labels_yolo.keys() if cls not in LABELS_STR_LIST_BLACKLIST]
-LABELS_DIC_FILTERED = {key: value for key, value in vp.labels_yolo.items() if key in LABELS_STR_LIST_WHITELIST}
-LABELS_IDS_LIST_FILTERED = list(LABELS_DIC_FILTERED.values())
-MODEL_OBJ_DET_PATH = 'vision_package/yoloV8_models/yolov8n.pt'
-MODEL_SEG_PATH = 'vision_package/yoloV8_models/yolov8n-seg.pt'
-YOLO_VERBOSE = True
-CONF_THRES_OBJ_DET = 0.25
-
-# Image Capture
-video_recording_on = False
-taking_pictures_on = False
+#######################################################################################################################
 
 # Helper
 RES = (WIDTH, HEIGHT)
@@ -65,9 +55,92 @@ RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 ORANGE = (255, 165, 0)
 BLUE = (0, 0, 255)
+
 dummy_img_for_init = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
 blank_img_for_takeoff_touchdown_screen = np.zeros((HEIGHT, WIDTH), dtype=np.uint8)
 IMG_FOR_STARTING_SCREEN_PATH = "../data/assets/starting_screen.jpg"
+
+# YOLO
+LABELS_STR_LIST_BLACKLIST = ['train', 'stop sign', "dining table"]
+LABELS_STR_LIST_WHITELIST = [cls for cls in vp.labels_yolo.keys() if cls not in LABELS_STR_LIST_BLACKLIST]
+LABELS_DIC_FILTERED = {key: value for key, value in vp.labels_yolo.items() if key in LABELS_STR_LIST_WHITELIST}
+LABELS_IDS_LIST_FILTERED = list(LABELS_DIC_FILTERED.values())
+MODEL_OBJ_DET_PATH = '../code/vision_package/yoloV8_models/yolov8n.pt'
+MODEL_SEG_PATH = '../code/vision_package/yoloV8_models/yolov8n-seg.pt'
+YOLO_VERBOSE = True
+
+# Tello Drone
+MIRROR_DOWN = True
+
+# Image Capture
+'''video_recording_on = False
+taking_pictures_on = False'''
+
+'''# Threading (should actually be inside run() and declared global)
+frame_q = queue.Queue()
+img_obj_det_q = queue.Queue()
+landing_zone_xy_q = queue.Queue()
+controller_initialized = threading.Event()'''
+
+
+#######################################################################################################################
+
+
+def yolo_thread():
+    print('[YOLO-THREAD]: __init__ started')
+
+    global exit_program, landing_zone_xy_q  # , frame_q, img_obj_det_q
+
+    frame_from_queue = None
+    print('[YOLO-THREAD]: yolo_thread fully initialized')
+
+    controller_initialized.wait()
+
+    while not exit_program:
+        yolo_start_time = time.time()
+
+        try:
+            frame_from_queue = frame_q.get()
+        except queue.Empty:
+            print('[YOLO-THREAD]: EXCEPTION frame_queue is empty')
+            pass
+
+        if frame_from_queue is not None:
+            print('[YOLO-THREAD]: starting inference')
+            yolo_inference_start_time = time.time()
+
+            landing_zone_xy, img_from_lz_finder, _ = lz_finder.get_final_lz(frame_from_queue)
+
+            yolo_inference_end_time = time.time()
+            ut.print_interval_ms('[YOLO-THREAD]: Inference Time', yolo_inference_start_time, yolo_inference_end_time)
+
+        else:
+            print('[YOLO-THREAD]: frame_from_queue is None')
+            pass
+
+        if img_from_lz_finder is not None:
+            print(f'[YOLO-THREAD]: Landing Zone: {landing_zone_xy}')
+            with landing_zone_xy_q.mutex:
+                landing_zone_xy_q.queue.clear()
+            landing_zone_xy_q.put(landing_zone_xy)
+            print('[YOLO-THREAD]: landing_zone_xy put in queue')
+        else:
+            print('[YOLO-THREAD]: landing_zone_xy is None')
+
+        if img_from_lz_finder is not None:
+            print(f'[YOLO-THREAD]: img_from_lz_finder: {img_from_lz_finder.shape}')
+            with img_obj_det_q.mutex:
+                img_obj_det_q.queue.clear()
+            img_obj_det_q.put(img_from_lz_finder)
+            print('[YOLO-THREAD]: img_from_lz_finder put in queue')
+        else:
+            print('[YOLO-THREAD]: img_from_lz_finder is None')
+
+        frame_from_queue = None
+
+        yolo_end_time = time.time()
+        ut.print_interval_ms('[YOLO-THREAD]: Loop Time', yolo_start_time, yolo_end_time)
+
 
 #######################################################################################################################
 
@@ -75,13 +148,13 @@ class DroneController:
 
     def __init__(self):
 
-        print('[CONTROLLER-THREAD]: DroneController __init__ started')
+        print('[CONTROLLER-THREAD]: __init__ started')
 
         # APRILTAG FINDER
         self.apriltag_finder = vp.ApriltagFinder(resolution=RES)
 
         # AUTO PILOT
-        self.auto_pilot = tp.Autopilot(res=RES, PID=PID, auto_pilot_speed=AUTO_PILOT_SPEED_APPROACH,
+        self.auto_pilot = tp.Autopilot(res=RES, auto_pilot_speed=AUTO_PILOT_SPEED_APPROACH,
                                        apriltag_factor=APRILTAG_FACTOR,
                                        position_tolerance_threshold=POSITION_TOLERANCE_THRESHOLD_APPROACH)
 
@@ -91,6 +164,7 @@ class DroneController:
         # PYGAME
         self.py_game = tp.Pygame(res=RES)
         self.screen = self.py_game.screen
+
         img_for_starting_screen = pygame.image.load(IMG_FOR_STARTING_SCREEN_PATH)
         img_for_starting_screen = pygame.transform.scale(img_for_starting_screen, (WIDTH, HEIGHT))
         self.screen.blit(img_for_starting_screen, (0, 0))
@@ -100,24 +174,26 @@ class DroneController:
         # LZ FINDER
         print('[CONTROLLER-THREAD]: Initialize lz_finder')
         self.lz_finder = vp.LzFinder(model_obj_det_path=MODEL_OBJ_DET_PATH, model_seg_path=MODEL_SEG_PATH,
-                                     labels_dic_filtered=LABELS_DIC_FILTERED,
-                                     max_det=MAX_DET, res=RES, verbose=YOLO_VERBOSE,
-                                     r_landing_factor=R_LANDING_FACTOR, stride=STRIDE,
-                                     use_seg_for_lz=USE_SEG_FOR_LZ,
-                                     weight_dist=WEIGHT_DIST, weight_risk=WEIGHT_RISK, weight_obs=WEIGHT_OB,
-                                     draw_lzs=DRAW_LZS_IN_LZ_FINDER)
-
+                                     labels_dic_filtered=LABELS_DIC_FILTERED, max_det=MAX_DET, res=RES,
+                                     use_seg_for_lz=USE_SEG_FOR_LZ, r_landing_factor=R_LANDING_FACTOR, stride=STRIDE,
+                                     verbose=True, weight_dist=WEIGHT_DIST, weight_risk=WEIGHT_RISK,
+                                     weight_obs=WEIGHT_OB, draw_lzs=False)
         _, _, _ = self.lz_finder.get_final_lz(dummy_img_for_init)
         print('[CONTROLLER-THREAD]: lz_finder initialized including DUMMY inference')
 
         # DRONE
         ut.connect_to_wifi(tello_wifi)
-        self.drone = tp.Drone(res=RES, speed=MANUAL_SPEED)
+        time.sleep(4)
+        self.drone = tp.Drone(res=RES, mirror_down=MIRROR_DOWN, speed=SPEED)
         self.drone.power_up()
 
         print('[CONTROLLER-THREAD]: __init__ finished')
 
+        # controller_initialized.set()
+
     def run(self):
+
+        # global exit_program, prev_error, landing_zone_xy_q, frame_q, img_obj_det_q
 
         # General Variables
         exit_program = False
@@ -125,7 +201,6 @@ class DroneController:
         # Images
         img_april_tag = None
         frame_lz_inference = dummy_img_for_init
-        risk_map = dummy_img_for_init
 
         # Auto Pilot
         prev_error = (0, 0, 0, 0)
@@ -160,11 +235,31 @@ class DroneController:
 
             print('[CONTROLLER-THREAD]: Flight-Phase: ' + self.drone.flight_phase)
 
+            '''print('[CONTROLLER-THREAD]: run() LOOP started')
+            print(f'[CONTROLLER-THREAD]: Number of active Threads = {threading.active_count()}')
+
+            for thread in threading.enumerate():
+                print(f"[CONTROLLER-THREAD]: Thread Name: {thread.name}")'''
+
             rc_values = (0, 0, 0, 0)
+
+            # img_obj_det_from_queue = None
 
             # NEW FRAME ################################################################################################
 
             frame_from_drone = self.drone.get_frame()
+
+            ''' # FRAME TO QUEUE EVERY 500 ms
+            for event in pygame.event.get():
+                if event.type == USEREVENT + 1:
+                    with frame_q.mutex:
+                        frame_q.queue.clear()
+                    frame_q.put(frame_from_drone)
+                    print('[CONTROLLER-THREAD]: frame_from_drone put in queue')'''
+
+            '''if event.type == USEREVENT + 2:
+                rc_values = tp.keyboard_rc(self.drone, rc_values, self.py_game, self.drone.speed)
+                self.drone.me.send_rc_control(rc_values[0], rc_values[1], rc_values[2], rc_values[3])'''
 
             # REGISTER KEYBOARD INPUT #################################################################################
 
@@ -226,8 +321,8 @@ class DroneController:
                 print('[CONTROLLER-THREAD]: YOLO Segmentation +++++++++++++++++')
 
             elif tp.risk_map_key_pressed(self.py_game):
-                self.drone.flight_phase = "Risk Map"
-                print('[CONTROLLER-THREAD]: Risk Map +++++++++++++++++')
+                self.drone.flight_phase = "LZ-Finder"
+                print('[CONTROLLER-THREAD]: LZ-Finder +++++++++++++++++')
 
             elif tp.approach_phase_key_pressed(self.py_game):
                 self.drone.flight_phase = "Approach"
@@ -263,11 +358,11 @@ class DroneController:
                 else:
                     img_april_tag, _, _ = self.apriltag_finder.apriltag_center_area(frame_from_drone)
 
-            elif self.drone.flight_phase == "Landing" or self.drone.flight_phase == "Risk Map":
+            elif self.drone.flight_phase == "Landing" or self.drone.flight_phase == "LZ-Finder":
 
                 frame_lz_inference = copy.deepcopy(frame_from_drone)  # otherwise frame_from_drone is overwritten
 
-                landing_zone_xy, frame_lz_inference, risk_map = self.lz_finder.get_final_lz(frame_lz_inference)
+                landing_zone_xy, frame_lz_inference, _ = self.lz_finder.get_final_lz(frame_lz_inference)
 
                 landing_zone_xy_avg, list_of_lz_tuples = ut.rolling_average_of_tuples(list_of_tuples=list_of_lz_tuples,
                                                                                       new_tuple=landing_zone_xy,
@@ -292,6 +387,35 @@ class DroneController:
             if timer_auto_transition < 0:
                 timer_auto_transition = 0
 
+            '''try:
+                img_obj_det_from_queue = img_obj_det_q.get_nowait()
+            except queue.Empty:
+                print('[CONTROLLER-THREAD]: queue is empty')
+
+            # if self.auto_pilot.auto_pilot_armed:
+            try:
+                landing_zone_xy = landing_zone_xy_q.get_nowait()
+            except queue.Empty:
+                print('[CONTROLLER-THREAD]: landing_zone_xy_queue is empty')'''
+
+            '''elif self.drone.flight_phase == "Landing":
+                try:
+                    img_obj_det = yolo_img_q.get_nowait()
+                    #img_obj_det = yolo_img_queue.get_nowait()
+                except queue.Empty:
+                    print('[CONTROLLER-THREAD]: queue is empty')
+                    continue
+
+                if self.auto_pilot.auto_pilot_armed:
+                    try:
+                        landing_zone_xy = xy_landing_zone_q.get_nowait()
+                        #landing_zone_xy = xy_landing_zone_queue.get_nowait()
+                    except queue.Empty:
+                        print('[CONTROLLER-THREAD]: queue is empty')
+                        continue
+                else:
+                    pass'''
+
             # EXECUTE CONTROL ACTIONS #################################################################################
 
             if target_xy != (0, 0):
@@ -312,11 +436,11 @@ class DroneController:
 
                 if self.drone.flight_phase == "Approach":
                     auto_transition_timer = AUTO_TRANSITION_TIMER_APPROACH
-                    self.auto_pilot.position_tolerance_threshold = POSITION_TOLERANCE_THRESHOLD_APPROACH
+                    position_tolerance_threshold = POSITION_TOLERANCE_THRESHOLD_APPROACH
 
                 elif self.drone.flight_phase == "Landing":
                     auto_transition_timer = AUTO_TRANSITION_TIMER_LANDING
-                    self.auto_pilot.position_tolerance_threshold = POSITION_TOLERANCE_THRESHOLD_LANDING
+                    position_tolerance_threshold = POSITION_TOLERANCE_THRESHOLD_LANDING
 
                 if seconds_within_current_clearance_period >= auto_transition_timer:
                     if self.drone.flight_phase == "Approach":
@@ -325,6 +449,7 @@ class DroneController:
                         error = (0, 0, 0, 0)
                         prev_error = (0, 0, 0, 0)
                         self.drone.me.move_down(30)
+                        position_tolerance_threshold = POSITION_TOLERANCE_THRESHOLD_LANDING
                         self.auto_pilot.autopilot_speed = AUTO_PILOT_SPEED_LANDING
                         self.drone.flight_phase = "Landing"
                     elif self.drone.flight_phase == "Landing":
@@ -372,9 +497,15 @@ class DroneController:
                 frame_seg_annotated = ut.add_central_dot(frame_seg_annotated)
                 self.py_game.display_video_feed(self.screen, frame_seg_annotated)
 
-            elif self.drone.flight_phase == "Risk Map":
-                risk_map = cv.applyColorMap(risk_map, cv.COLORMAP_BONE)
-                self.py_game.display_video_feed(self.screen, risk_map)
+            elif self.drone.flight_phase == "LZ-Finder":
+
+                frame_lz_annotated = ut.add_central_dot(frame_from_drone)
+
+                frame_lz_annotated = cv.circle(frame_lz_annotated, landing_zone_xy_avg, self.lz_finder.r_landing, BLUE,
+                                               3)
+                frame_lz_annotated = cv.circle(frame_lz_annotated, landing_zone_xy, self.lz_finder.r_landing, BLUE, 1)
+
+                self.py_game.display_video_feed(self.screen, frame_lz_annotated)
 
             elif self.drone.flight_phase == "Approach":
                 img_april_tag = ut.add_central_dot(img_april_tag)
@@ -398,11 +529,20 @@ class DroneController:
                 self.screen.blit(img_for_starting_screen, (0, 0))
                 pygame.display.flip()
 
+            '''elif self.drone.flight_phase == "Landing":
+                if img_obj_det_from_queue is not None:
+                    self.py_game.display_video_feed(self.screen, img_obj_det_from_queue)
+                else:
+                    print('[CONTROLLER-THREAD]: img_obj_det_from_queue is None')'''
+
             # DISPLAY STATUS
 
-            self.py_game.display_multiple_status(screen=self.screen, v_pos=10, h_pos=10, battery_level=battery_level,
-                                                 flight_time=flight_time,  # temperature=temperature,
-                                                 distance_tof=distance_tof,  # speed=self.drone.speed,
+            self.py_game.display_multiple_status(screen=self.screen, v_pos=10, h_pos=10,
+                                                 battery_level=battery_level,
+                                                 flight_time=flight_time,
+                                                 # temperature=temperature,
+                                                 distance_tof=distance_tof,
+                                                 # speed=self.drone.speed,
                                                  auto_pilot_speed=self.auto_pilot.autopilot_speed,
                                                  flight_phase=self.drone.flight_phase,
                                                  auto_pilot_armed=self.auto_pilot.auto_pilot_armed,
@@ -452,6 +592,10 @@ class DroneController:
 
 
 def main():
+    '''thread_yolo = threading.Thread(target=yolo_thread, args=())
+    thread_yolo.daemon = True
+    thread_yolo.start()'''
+
     yolo_drone = DroneController()
     yolo_drone.run()
 

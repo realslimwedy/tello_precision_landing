@@ -12,7 +12,10 @@ model_path = '../code/yoloV8_models/yolov8n.pt'
 
 def test_yolo_obj_det():
     start_time_model_load = time.time()
-    object_detector = vp.ObjectDetector(model_path, labels_dic_filtered, verbose=True, max_det=None)
+
+    object_detector = vp.ObjectDetector(model_path, labels_dic_filtered, verbose=True, max_det=None,
+                                        conf_thres_obj_det=0.25)
+
     end_time_model_load = time.time()
     ut.print_interval_ms('Model Load Time', start_time_model_load, end_time_model_load)
 
@@ -29,9 +32,7 @@ def test_yolo_obj_det():
 
         frame = cv.resize(frame, (640, 480))
 
-        height, width = frame.shape[:2]
-
-        img, obstacles = object_detector.infer_image(height, width, frame)
+        img, obstacles = object_detector.infer_image(frame, draw_boxes=True)
 
         cv.imshow("YOLOv8 Object Detection TEST", img)
         cv.waitKey(1)

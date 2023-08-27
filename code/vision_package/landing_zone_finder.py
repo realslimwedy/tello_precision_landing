@@ -9,25 +9,23 @@ from . import labels
 
 class LzFinder:
     def __init__(self, model_obj_det_path, model_seg_path, labels_dic_filtered, weight_dist, weight_risk, weight_obs,
-                 max_det=None, res=(640, 480),
-                 use_seg_for_lz=False, r_landing_factor=6, stride=75, verbose=False, draw_lzs=True):
+                 max_det=None, res=(640, 480), use_seg_for_lz=False, r_landing_factor=6, stride=75, verbose=False,
+                 draw_lzs=True, conf_thres_obj_det=0.25):
         self.weight_dist = weight_dist
         self.weight_risk = weight_risk
         self.weight_obs = weight_obs
         self.draw_lzs = draw_lzs
-        self.use_seg = use_seg_for_lz
+        self.use_seg_for_lz = use_seg_for_lz
         self.stride = stride
         self.labels_dic_filtered = labels_dic_filtered
-        # for weights for debugging
-
+        self.conf_thres_obj_det = conf_thres_obj_det
         self.width, self.height = res
         self.r_landing = int(self.width * r_landing_factor / 100)
 
-        self.posOb = [0, 0, 0, 0]
-
         self.object_detector = yolo_obj_det_util.ObjectDetector(model_path=model_obj_det_path,
                                                                 labels_dic_filtered=self.labels_dic_filtered,
-                                                                max_det=max_det, verbose=verbose)
+                                                                max_det=max_det, verbose=verbose,
+                                                                conf_thres_obj_det=self.conf_thres_obj_det)
 
         self.seg_engine = yolo_seg_util.SegmentationEngine(model_path=model_seg_path,
                                                            labels_dic_filtered=self.labels_dic_filtered,
@@ -38,84 +36,72 @@ class LzFinder:
         Resolution: {self.res}
         R-Landing: {self.r_landing}
         Stride: {self.stride}
-        Use Segmentation: {self.use_seg}
+        Use Segmentation: {self.use_seg_for_lz}
         Labels: {self.labels_dic_filtered}"""
 
-
-
-
-
     def get_final_lz(self, img):
-        objs = []
-        obstacles = []
+
+        # INITIALIZE VARIABLES #########################################################################################
+        obstacles_rectangles_list = []
+        obstacle_box_xywh = [0, 0, 0, 0]
+        obstacles_circles_list = []
         lzs_ranked = []
-        landing_zone_xy = (int(self.width / 2), int(self.height / 2))
+        landing_zone_xy_default = (int(self.width / 2), int(self.height / 2))
+        landing_zone_xy = landing_zone_xy_default
 
-        # get objects from YOLO object detection inference
-        # unless deep copy of image, image will be annotated with bounding boxes
-        img, objs = self.object_detector.infer_image(height=self.height, width=self.width, img=img,
-                                                   draw_boxes=True)  # this takes around 150ms / 99% of iteration time
+        # OBJECT DETECTOR INFERENCE ####################################################################################
+        img, obstacles_rectangles_list = self.object_detector.infer_image(img=img, draw_boxes=True)
 
-        # get segmentation image from YOLO segmentation inference
-        if self.use_seg:
-            seg_img = self.seg_engine.infer_image(img=img, width=self.width, height=self.height)
+        # SEGMENTATION ENGINE INFERENCE ################################################################################
+        if self.use_seg_for_lz:
+            seg_output_array_with_class_predictions = self.seg_engine.infer_image(img=img, width=self.width,
+                                                                                  height=self.height)  # pixel = class
         else:
-            seg_img = self.seg_engine.infer_image_dummy(img)
+            seg_output_array_with_class_predictions = self.seg_engine.infer_image_dummy(img)
 
-        # get obstacles from YOLO object detection inference
-        for obstacle in objs:
-            self.posOb = obstacle.get("box")
-            w, h = self.posOb[2], self.posOb[3]
+        # CONVERT OBSTACLE RECTANGLES INTO OBSTACLE CIRCLES ############################################################
+        for obstacle_rectangle in obstacles_rectangles_list:
+            obstacle_box_xywh = obstacle_rectangle.get("box")
+            w, h = obstacle_box_xywh[2], obstacle_box_xywh[3]
             diagonal = math.sqrt(w ** 2 + h ** 2)
             min_dist = int(diagonal / 2)
-            obstacles.append([int(self.posOb[0] + w / 2), int(self.posOb[1] + h / 2), min_dist])
+            obstacles_circles_list.append(
+                [int(obstacle_box_xywh[0] + w / 2), int(obstacle_box_xywh[1] + h / 2), min_dist])
 
-        # get lz proposals which don't intersect with obstacles ranked according to weighted score
-        lzs_ranked, risk_map = self.get_ranked_lz(obstacles, seg_img)
+        # RANK LANDING ZONES (no obstacle interference) & OBTAIN RISK MAP ##############################################
+        lzs_ranked, risk_map = self.get_ranked_lz(obstacles_circles_list, seg_output_array_with_class_predictions)
 
-        if objs:
+        #
+        if obstacles_rectangles_list:
             if lzs_ranked:
-                # determine top lz proposal
-                landing_zone = lzs_ranked[-1]
+                landing_zone = lzs_ranked[-1]  # determine top lz proposal
+                landing_zone_xy = landing_zone["position"]  # extract xy coordinates
 
-                # extract xy coordinates
-                landing_zone_xy = landing_zone["position"]
-
-                # draw top lz proposal
-                img = self.draw_lzs_obs([lzs_ranked[-1]], obstacles, img, thickness=2,
-                                        draw_lzs=self.draw_lzs)  # if no lz, nothing is drawn
+                img = self.draw_landingzones_and_obstacles([lzs_ranked[-1]], obstacles_circles_list, img, thickness=2,
+                                                           draw_lzs=self.draw_lzs)  # draw top lz proposal, if no lz, nothing is drawn
             else:
-                print("No landing zone found, objects detected")
+                print("Objects detected, BUT NO LANDING ZONE FOUND, ")
         else:
-            landing_zone_xy = (int(self.width / 2), int(self.height / 2))
-            print("No landing zone found, no objects detected")
-
-        '''lz = {"confidence": 1, "radius": self.r_landing,
-              "position": (int(self.width / 2), int(self.height / 2)), "id": 1
-              }
-        lzs_ranked.append(lz)'''
+            landing_zone_xy = landing_zone_xy_default
+            print("NO OBJECTS DETECTED")
 
         return landing_zone_xy, img, risk_map
 
+    def get_ranked_lz(self, obstacles_circles_list, seg_output_array_class_predictions):
 
+        lz_proposals = self.get_lz_proposals(obstacles_circles_list)
 
+        if self.use_seg_for_lz:
+            seg_output_array_risk_levels = self.get_risk_map(seg_output_array_class_predictions)
+            lzs_ranked = self.rank_lzs(lz_proposals, seg_output_array_risk_levels, obstacles_circles_list)
 
+        elif not self.use_seg_for_lz:
+            seg_output_array_risk_levels = np.zeros(seg_output_array_class_predictions.shape, np.uint8)
+            lzs_ranked = self.rank_lzs(lz_proposals, seg_output_array_risk_levels, obstacles_circles_list)
 
+        return lzs_ranked, seg_output_array_risk_levels
 
-    def get_ranked_lz(self, obstacles, segImg):
-
-        lz_proposals = self._get_lz_proposals(obstacles)
-
-        if not self.use_seg:
-            risk_map = np.zeros(segImg.shape, np.uint8)
-            lzs_ranked = self._rank_lzs(lz_proposals, risk_map, obstacles)
-        elif self.use_seg:
-            risk_map = self._get_risk_map(segImg)
-            lzs_ranked = self._rank_lzs(lz_proposals, risk_map, obstacles)
-
-        return lzs_ranked, risk_map
-
-    def _mean_dist_to_all_obstacles(self, lz, obstacles):
+    def mean_dist_to_all_obstacles(self, lz, obstacles):
         pos_lz = lz.get("position")
         dist_normalized_list = []
         if not obstacles:
@@ -126,7 +112,7 @@ class LzFinder:
                 dist_normalized_list.append(dist_normalized)
             return np.mean(dist_normalized_list)
 
-    def _meets_min_safety_requirement(cls, zone_proposed, obstacles_list):
+    def meets_min_safety_requirement(cls, zone_proposed, obstacles_list):
         pos_lz = zone_proposed.get("position")
         rad_lz = zone_proposed.get("radius")
         for obstacle in obstacles_list:
@@ -135,90 +121,73 @@ class LzFinder:
                 return False
         return True
 
-    def _get_lz_proposals(self, obstacles):
+    def get_lz_proposals(self, obstacles):
         zones_proposed = []
 
         for y in range(self.r_landing, self.height - self.r_landing, self.stride):
 
             for x in range(self.r_landing, self.width - self.r_landing, self.stride):
 
-                lz_proposed = {
-                    "confidence": math.nan,
-                    "radius": self.r_landing,
-                    "position": (x, y),
-                    "id": 1
-                }
+                lz_proposed = {"lz_score": math.nan, "radius": self.r_landing, "position": (x, y), "id": 1}
 
-                if not self._meets_min_safety_requirement(lz_proposed, obstacles):
-                    lz_proposed["confidence"] = 0  # NaN means safe, zero means unsafe
+                if not self.meets_min_safety_requirement(lz_proposed, obstacles):
+                    lz_proposed["lz_score"] = 0  # NaN means safe, zero means unsafe/disqualified
                 zones_proposed.append(lz_proposed)
 
         return zones_proposed
 
-
-
-
-
-    def _rank_lzs(self, lzs_proposals, risk_map, obstacles):
+    def rank_lzs(self, lzs_proposals, seg_output_array_risk_levels, obstacles_circles_list):
 
         ranked_lzs = []
 
-        if not self.use_seg:
-            self.weight_risk = 0
+        for lz in lzs_proposals:  # this loop writes new lz_score to the lzsProposals list elements
 
-
-        for lz in lzs_proposals:  # this loop writes new confidence values to the lzsProposals list elements
+            safety_factor, center_distance_factor, obstacles_clearance_factor = 0, 0, 0
 
             lz_rad = lz.get("radius")
             lz_pos = lz.get("position")
 
-            if self.use_seg == True:
-                mask = np.zeros_like(risk_map)  # this is a numpy array of zeros with the same shape as riskMap
+            if self.use_seg_for_lz == True:
+                mask = np.zeros_like(seg_output_array_risk_levels)  # np array of zeros with same shape as riskMap
                 mask = cv.circle(mask, (lz_pos[0], lz_pos[1]), lz_rad, (255, 255, 255), -1)  # -1 means filled
 
                 area_lz = math.pi * lz_rad * lz_rad
 
-                crop = cv.bitwise_and(risk_map, mask)
-                # this leaves only the circle in the risk map  # each pixel contains the risk value (0-255) of the risk map
+                crop = cv.bitwise_and(seg_output_array_risk_levels,
+                                      mask)  # leaves only pixels in circle in risk map, each pixel = risk value (0-255)
 
-            risk_factor, distance_from_center_factor, distance_from_obstacles_norm_mean_factor = 0, 0, 0
+            # higher factor values imply safer zone which leads to higher lz_score
+
+            total_weight = self.weight_risk + self.weight_dist + self.weight_obs
 
             if self.weight_risk != 0:
-                if self.use_seg == True:
-                    risk_factor = self._risk_map_eval_basic(crop, area_lz)  # higher value means lower risk
+                if self.use_seg_for_lz == True:
+                    safety_factor = self.risk_map_eval_basic(crop, area_lz)
 
             if self.weight_dist != 0:
-                distance_from_center_factor = self.get_distance_center(
-                    (lz_pos[0], lz_pos[1]))  # higher value means closer to center
+                center_distance_factor = self.get_distance_center((lz_pos[0], lz_pos[1]))
 
             if self.weight_obs != 0:
-                distance_from_obstacles_norm_mean_factor = self._mean_dist_to_all_obstacles(lz, obstacles)
-                # higher value means further from obstacles
+                obstacles_clearance_factor = self.mean_dist_to_all_obstacles(lz, obstacles_circles_list)
 
-            if math.isnan(lz["confidence"]):  # confidence actually means how well the lz meets the requirements
-                # Calculate the confidence value and set it in the lz dictionary
-                total_weight = self.weight_risk + self.weight_dist + self.weight_obs
-
-                lz["confidence"] = distance_from_center_factor
-                #abs((self.weight_risk * risk_factor + self.weight_dist * distance_from_center_factor + self.weight_obs * distance_from_obstacles_norm_mean_factor) / total_weight)
-
-            if lz["confidence"] != 0:
+            if math.isnan(lz["lz_score"]):  # only consider nan lz_scores as zweo lz_score don't have minimum clearance
+                # Calculate the lz_score and write it in the lz dictionary
+                lz["lz_score"] = abs((
+                                             self.weight_risk * safety_factor + self.weight_dist * center_distance_factor + self.weight_obs * obstacles_clearance_factor) / total_weight)
+            if lz["lz_score"] != 0:
                 ranked_lzs.append(lz)
-
 
         # Check if lzs_sorted is not empty before accessing the last element
         if ranked_lzs:
-            lzs_sorted = sorted(ranked_lzs, key=lambda k: k["confidence"])
+            lzs_sorted = sorted(ranked_lzs, key=lambda k: k["lz_score"])
         else:
             lzs_sorted = []
 
         return lzs_sorted
 
-
-
     def get_distance_center(self, pt):
-        furthest_distance = math.hypot(self.height/2, self.width/2)
-        dist = distance.euclidean(pt, (self.width/2, self.height/2))
+        furthest_distance = math.hypot(self.height / 2, self.width / 2)
+        dist = distance.euclidean(pt, (self.width / 2, self.height / 2))
         return 1 - abs(dist / furthest_distance)  # higher value means closer to center
 
     def get_distance_normalized(self, pt1, pt2):
@@ -228,9 +197,9 @@ class LzFinder:
         return dist_normalized
 
     @classmethod
-    def draw_lzs_obs(cls, list_lzs, list_obs, img, thickness=2, draw_lzs=True):
+    def draw_landingzones_and_obstacles(cls, list_lzs, list_obs, img, thickness=2, draw_lzs=True):
         for obstacle in list_obs:
-            cv.circle(img, (obstacle[0], obstacle[1]), obstacle[2], (255, 0, 0), thickness=thickness, )
+            cv.circle(img, (obstacle[0], obstacle[1]), obstacle[2], (255, 0, 0), thickness=thickness)
         if draw_lzs:
             for lz in list_lzs:
                 pos_lz = lz.get("position")
@@ -273,11 +242,11 @@ class LzFinder:
             landing_zone_xy_avg = None
         return landing_zone_xy_avg, landing_zone_xy_rolling_list
 
-    def _get_risk_map(self, seg_array_with_class_id, gaussian_sigma=25):
+    def get_risk_map(self, seg_output_array_with_class_predictions, gaussian_sigma=25):
         '''seg_array_float32 = seg_array.astype("float32")  # Convert seg_img to float32
         risk_array = seg_array_float32.copy()  # Make a copy of the image to use for risk_array'''
 
-        risk_array_with_risk_level = seg_array_with_class_id.astype(
+        risk_array_with_risk_level = seg_output_array_with_class_predictions.astype(
             "float32")  # REALLY NEEDED??? Convert seg_img to float32
 
         for key in self.labels_dic_filtered:
@@ -291,7 +260,7 @@ class LzFinder:
 
         return risk_array_with_risk_level  # returns a risk map with values from 0 to 255
 
-    def _risk_map_eval_basic(self, crop_array, areaLz):
+    def risk_map_eval_basic(self, crop_array, areaLz):
         maxRisk = areaLz * 255
         cropRisk = np.sum(crop_array)
         return 1 - (cropRisk / maxRisk)

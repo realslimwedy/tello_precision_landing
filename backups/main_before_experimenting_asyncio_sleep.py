@@ -92,7 +92,7 @@ if __name__ == '__main__':
                 py_game.display_multiple_status(screen=screen, screen_variables_names_units=screen_variables_names_units,
                                                 v_pos=10, h_pos=10,
                                                 battery_level=battery_level, flight_phase=drone.flight_phase,
-                                                auto_pilot_armed=auto_pilot.auto_pilot_armed, speed=drone.SPEED, temperature=temperature,
+                                                auto_pilot_armed=auto_pilot.auto_pilot_armed, speed=drone.MANUAL_SPEED, temperature=temperature,
                                                 flight_time=flight_time)
 
                 pygame.display.flip()
@@ -146,12 +146,12 @@ if __name__ == '__main__':
                     prev_error = error
 
                 if tp.switch_speed_key_pressed(py_game):
-                    if drone.SPEED == 50:
-                        drone.SPEED = 100
-                    elif drone.SPEED == 100:
-                        drone.SPEED = 50
+                    if drone.MANUAL_SPEED == 50:
+                        drone.MANUAL_SPEED = 100
+                    elif drone.MANUAL_SPEED == 100:
+                        drone.MANUAL_SPEED = 50
 
-                rc_params = tp.keyboard_rc(drone.me, rc_params, py_game, drone.SPEED)
+                rc_params = tp.keyboard_rc(drone.me, rc_params, py_game, drone.MANUAL_SPEED)
 
                 drone.me.send_rc_control(rc_params[0], rc_params[1], rc_params[2], rc_params[3])
 

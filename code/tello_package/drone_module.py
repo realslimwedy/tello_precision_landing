@@ -7,9 +7,8 @@ from code import tello_package as tp
 
 
 class Drone():
-    def __init__(self, res=(640, 480), mirror_down=True, speed=50):
+    def __init__(self, res=(640, 480), speed=50):
         self.resolution = res
-        self.mirror_down = mirror_down
         self.drone_is_on = False
         self.flight_phase = 'Pre-Flight'
         self.me = tello.Tello()
@@ -18,7 +17,6 @@ class Drone():
     def __repr__(self):
         return f'''
 Drone object with resolution {self.resolution}
-mirror_down: {self.mirror_down}
 drone_is_on: {self.drone_is_on}
 flight_phase: {self.flight_phase}'''
 
@@ -68,9 +66,8 @@ flight_phase: {self.flight_phase}'''
     def get_frame(self):
         img = self.me.get_frame_read().frame
         img = cv.resize(img, self.resolution)
-        if self.mirror_down:
-            img = cv.flip(img, 0)
-        # colors are BGR but will be converted to RGB in main.py
+        img = cv.flip(img, 0)
+        # colors are BGR but will be converted to RGB in main_backup_with_threading_commented_out.py
         return img
 
 

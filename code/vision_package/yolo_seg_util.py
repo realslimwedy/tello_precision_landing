@@ -7,28 +7,29 @@ class SegmentationEngine():
         self.model = YOLO(model_path)
         self.labels_ids_list_filtered = list(labels_dic_filtered.values())
         self.verbose = verbose
-
-        self.background_index = 80  # must be one greater than the last index in labels_yolo  # this is a workaround:  # main reason: a person is class 0 in YOLOv8, so background needs to be indexed differently  # using -1 would yield 255 during conversion into uint8 in inferImage()  # workaround: use 80, which is the index of the last class in labels_yolo +1  # self.background_index must a unique value and stated in labels.risk_labels  # for later conversion into risk_map
+        self.background_index = 80  # workaround for risk map later as class 0 is used for "people"
 
     def __str__(self):
         return f"SegmentationEngine instance with model: {self.model}"
 
-    def infer_image(self, height, width, img):
+    def infer_image(self, img, height, width):
+
+        # PREPARE VARIABLES ############################################################################################
         width, height = width, height
+        seg_output_array_with_class_predictions = np.full((height, width), self.background_index, dtype=int)
 
-        results = self.model.predict(source=img, verbose=self.verbose,
-                                     classes=self.labels_ids_list_filtered)  # this list
-        boxes = results[0].boxes  # <class 'ultralytics.engine.results.Boxes'>
-        masks = results[0].masks  # <class 'ultralytics.engine.results.Masks'>
+        # YOLO MODEL INFERENCE #########################################################################################
+        yolo_results = self.model.predict(source=img, verbose=self.verbose, classes=self.labels_ids_list_filtered)
+        yolo_objects = yolo_results[0].boxes  # type: 'ultralytics.engine.results.Boxes'
+        yolo_masks = yolo_results[0].masks  # type: 'ultralytics.engine.results.Masks'
 
-        output_array_with_class_predictions = np.full((height, width), self.background_index, dtype=int)
+        # POPULATE OUTPUT ARRAY PIXELS WITH CLASS IDS ##################################################################
+        for i in range(len(yolo_objects)):
+            class_id = int(yolo_objects[i].cls.tolist()[0])  # type int
+            mask_list = yolo_masks.data[i].tolist()  # type list with 0s and 1s indicating where class is present
 
-        for i in range(len(boxes)):
-            cls_i = int(boxes[i].cls.tolist()[0])  # type int
-            mask_list = masks.data[i].tolist()  # type list with 0s and 1s indicating where class is present
-
-            # Get the height and width from the shape of the masks tensor
-            mask_height, mask_width = masks.shape[1], masks.shape[2]  # type int, corresponds to height, width of img
+            # Get height and width from the shape of mask's tensor, background: by default yolo scales down input image
+            mask_height, mask_width = yolo_masks.shape[1], yolo_masks.shape[2]
 
             # Calculate scaling factors
             scale_x = width / mask_width
@@ -41,11 +42,12 @@ class SegmentationEngine():
                         scaled_x = int(x * scale_x)
                         scaled_y = int(y * scale_y)
                         if scaled_x < width and scaled_y < height:
-                            output_array_with_class_predictions[scaled_y, scaled_x] = cls_i
+                            seg_output_array_with_class_predictions[scaled_y, scaled_x] = class_id
 
-        output_array_with_class_predictions = np.array(output_array_with_class_predictions, dtype=np.uint8)
+        # CONVERT ARRAY TYPE ###########################################################################################
+        seg_output_array_with_class_predictions = np.array(seg_output_array_with_class_predictions, dtype=np.uint8)
 
-        return output_array_with_class_predictions
+        return seg_output_array_with_class_predictions
 
     def infer_image_dummy(self, img):
         width, height = img.shape[1], img.shape[0]
