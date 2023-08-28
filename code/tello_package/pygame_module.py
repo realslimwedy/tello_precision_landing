@@ -4,8 +4,8 @@ import cv2 as cv
 screen_variables_names_units = {
     'names': {'battery_level': 'Battery Level', 'flight_phase': 'Flight Phase', 'auto_pilot_armed': 'Auto-Pilot Armed',
               'speed': 'Speed', 'temperature': 'Temperature', 'flight_time': 'Flight Time',
-              'timer_auto_transition': 'Timer Transition', 'distance_tof': 'Height', 'video_recording_on': 'Video Recording', 'taking_pictures_on': 'Taking Pictures', 'auto_pilot_speed':'Auto-Pilot Speed'},
-    'units': {'battery_level': '%', 'flight_phase': '', 'auto_pilot_armed': '', 'speed': '', 'distance_tof': 'cm',
+              'timer_auto_transition': 'Timer Transition', 'altitude_cm': 'Height', 'video_recording_on': 'Video Recording', 'taking_pictures_on': 'Taking Pictures', 'auto_pilot_speed':'Auto-Pilot Speed'},
+    'units': {'battery_level': '%', 'flight_phase': '', 'auto_pilot_armed': '', 'speed': '', 'altitude_cm': 'cm',
               'temperature': '°C', 'flight_time': 'sec', 'timer_auto_transition': 'sec', 'video_recording_on': '', 'taking_pictures_on': '', 'auto_pilot_speed': 'm/s'}}
 
 

@@ -1,10 +1,3 @@
-#######################################################################################################################
-
-# TODOS
-# - [ ] Scale circle size with drone height
-
-# IMPORTS #############################################################################################################
-
 import pygame, sys, time, copy
 import cv2 as cv
 import numpy as np
@@ -44,7 +37,6 @@ WEIGHT_OB = 1
 NUMBER_ROLLING_XY_VALUES = 10
 DRAW_LZS_IN_LZ_FINDER=False
 
-
 # YOLO
 LABELS_STR_LIST_BLACKLIST = ['train', 'stop sign', "dining table"]
 LABELS_STR_LIST_WHITELIST = [cls for cls in vp.labels_yolo.keys() if cls not in LABELS_STR_LIST_BLACKLIST]
@@ -68,6 +60,8 @@ BLUE = (0, 0, 255)
 dummy_img_for_init = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
 blank_img_for_takeoff_touchdown_screen = np.zeros((HEIGHT, WIDTH), dtype=np.uint8)
 IMG_FOR_STARTING_SCREEN_PATH = "../data/assets/starting_screen.jpg"
+R_LANDING_DEFAULT = int(WIDTH * 20 / 100)  # pixel
+ALTITUDE_CM_DEFAULT = 70  # cm
 
 #######################################################################################################################
 
@@ -102,12 +96,12 @@ class DroneController:
         self.lz_finder = vp.LzFinder(model_obj_det_path=MODEL_OBJ_DET_PATH, model_seg_path=MODEL_SEG_PATH,
                                      labels_dic_filtered=LABELS_DIC_FILTERED,
                                      max_det=MAX_DET, res=RES, verbose=YOLO_VERBOSE,
-                                     r_landing_factor=R_LANDING_FACTOR, stride=STRIDE,
+                                     stride=STRIDE,
                                      use_seg_for_lz=USE_SEG_FOR_LZ,
                                      weight_dist=WEIGHT_DIST, weight_risk=WEIGHT_RISK, weight_obs=WEIGHT_OB,
                                      draw_lzs=DRAW_LZS_IN_LZ_FINDER)
 
-        _, _, _ = self.lz_finder.get_final_lz(dummy_img_for_init)
+        _, _, _ = self.lz_finder.get_final_lz(dummy_img_for_init, R_LANDING_DEFAULT)
         print('[CONTROLLER-THREAD]: lz_finder initialized including DUMMY inference')
 
         # DRONE
@@ -126,6 +120,11 @@ class DroneController:
         img_april_tag = None
         frame_lz_inference = dummy_img_for_init
         risk_map = dummy_img_for_init
+
+        # Drone
+        battery_level = 100
+        flight_time = 0
+        altitude_cm=0
 
         # Auto Pilot
         prev_error = (0, 0, 0, 0)
@@ -267,7 +266,11 @@ class DroneController:
 
                 frame_lz_inference = copy.deepcopy(frame_from_drone)  # otherwise frame_from_drone is overwritten
 
-                landing_zone_xy, frame_lz_inference, risk_map = self.lz_finder.get_final_lz(frame_lz_inference)
+                battery_level, temperature, flight_time, _, altitude_cm = self.drone.get_drone_sensor_data()
+
+                r_landing = int(R_LANDING_DEFAULT * ALTITUDE_CM_DEFAULT/altitude_cm)
+
+                landing_zone_xy, frame_lz_inference, risk_map = self.lz_finder.get_final_lz(frame_lz_inference, r_landing)
 
                 landing_zone_xy_avg, list_of_lz_tuples = ut.rolling_average_of_tuples(list_of_tuples=list_of_lz_tuples,
                                                                                       new_tuple=landing_zone_xy,
@@ -346,8 +349,6 @@ class DroneController:
 
             # PYGAME VIDEO ##########################################################################################
 
-            battery_level, temperature, flight_time, _, distance_tof = self.drone.get_drone_sensor_data()
-
             if self.drone.flight_phase == "Take-off":
                 pass
 
@@ -402,7 +403,7 @@ class DroneController:
 
             self.py_game.display_multiple_status(screen=self.screen, v_pos=10, h_pos=10, battery_level=battery_level,
                                                  flight_time=flight_time,  # temperature=temperature,
-                                                 distance_tof=distance_tof,  # speed=self.drone.speed,
+                                                 altitude_cm=altitude_cm,  # speed=self.drone.speed,
                                                  auto_pilot_speed=self.auto_pilot.autopilot_speed,
                                                  flight_phase=self.drone.flight_phase,
                                                  auto_pilot_armed=self.auto_pilot.auto_pilot_armed,

@@ -60,8 +60,8 @@ flight_phase: {self.flight_phase}'''
         battery_level = self.me.get_battery()  # in %
         temperature = self.me.get_temperature()  # in °C
         barometer = self.me.get_barometer()  # in Pascal or in meter?
-        distance_tof = self.me.get_distance_tof()  # in cm
-        return battery_level, temperature, flight_time, barometer, distance_tof
+        altitude_cm = self.me.get_distance_tof()  # in cm
+        return battery_level, temperature, flight_time, barometer, altitude_cm
 
     def get_frame(self):
         img = self.me.get_frame_read().frame

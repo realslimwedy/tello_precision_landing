@@ -9,7 +9,7 @@ from . import labels
 
 class LzFinder:
     def __init__(self, model_obj_det_path, model_seg_path, labels_dic_filtered, weight_dist, weight_risk, weight_obs,
-                 max_det=None, res=(640, 480), use_seg_for_lz=False, r_landing_factor=6, stride=75, verbose=False,
+                 max_det=None, res=(640, 480), use_seg_for_lz=False, stride=75, verbose=False,
                  draw_lzs=True, conf_thres_obj_det=0.25):
         self.weight_dist = weight_dist
         self.weight_risk = weight_risk
@@ -20,7 +20,8 @@ class LzFinder:
         self.labels_dic_filtered = labels_dic_filtered
         self.conf_thres_obj_det = conf_thres_obj_det
         self.width, self.height = res
-        self.r_landing = int(self.width * r_landing_factor / 100)
+        self.r_landing_default = int(self.width * 6 / 100)
+        self.r_landing = self.r_landing_default
 
         self.object_detector = yolo_obj_det_util.ObjectDetector(model_path=model_obj_det_path,
                                                                 labels_dic_filtered=self.labels_dic_filtered,
@@ -34,14 +35,17 @@ class LzFinder:
     def __str__(self):
         return f"""
         Resolution: {self.res}
-        R-Landing: {self.r_landing}
         Stride: {self.stride}
         Use Segmentation: {self.use_seg_for_lz}
         Labels: {self.labels_dic_filtered}"""
 
-    def get_final_lz(self, img):
+    def get_final_lz(self, img, r_landing=None):
 
         # INITIALIZE VARIABLES #########################################################################################
+        if r_landing is None:
+            self.r_landing = self.r_landing_default
+        else:
+            self.r_landing = r_landing
         obstacles_rectangles_list = []
         obstacle_box_xywh = [0, 0, 0, 0]
         obstacles_circles_list = []
