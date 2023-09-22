@@ -8,6 +8,9 @@ import vision_package as vp
 import utils as ut
 from config import tello_wifi
 
+
+
+
 # General Parameters
 WIDTH, HEIGHT = 640, 480  # (1280, 720), (640, 480), (320, 240)
 FPS_FOR_VIDEO_RECORDING = 5  # realistically rather 1/250ms i.e. 4 FPS as one loop takes 250ms
