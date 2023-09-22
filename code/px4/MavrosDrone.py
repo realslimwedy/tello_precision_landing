@@ -1,14 +1,14 @@
+from code.px4.MavrosController import MavrosController
 
-class Mavros_drone:
+
+class MavrosDrone:
 
     def __init__(self, res=(640, 480), speed=50):
         self.resolution = res
         self.drone_is_on = False
         self.flight_phase = 'Pre-Flight'
-        self.me = Mavros_drone()
+        self.me = MavrosController()
         self.speed = speed
-
-
 
     def power_up(self):
         self.me.connect()
@@ -19,4 +19,3 @@ class Mavros_drone:
         print(f'Battery Level: {self.me.get_battery()} %')
         print(f'Flight Phase: {self.flight_phase}')
         print('#######################################################')
-        self.me.streamon()
